@@ -14,22 +14,25 @@ datasource db {
 }
 
 enum SchoolType {
-  PRIMARY
-  SECONDARY
-  PRIMARY_SECONDARY
+  primary
+  secondary
+  primary_and_secondary
 }
 
 enum SchoolOwnership {
-  GOVERNMENT_OWNED
-  PRIVATE
+  government
+  private
 }
 
 enum SchoolStatus {
-  NOT_VERIFIED
-  PENDING
-  APPROVED
-  REJECTED
-  FAILED
+  not_verified
+  pending
+  approved
+  rejected
+  failed
+  suspended
+  closed
+  archived
 }
 
 model School {
@@ -43,7 +46,7 @@ model School {
   cac              String?
   utility_bill     String?
   tax_clearance    String?
-  status           SchoolStatus   @default(PENDING)
+  status           SchoolStatus   @default(pending)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -19,18 +19,18 @@ export class OnboardSchoolDto {
 
     @IsNotEmpty()
     @IsString()
-    school_type: string;
+    school_type: SchoolType;
 
     @IsNotEmpty()
     @IsString()
-    school_ownership: string;
+    school_ownership: SchoolOwnership;
 }
 
 enum SchoolType {
-    PRIMARY = "primary",
-    SECONDARY = "secondary",
-    PRIMARY_SECONDARY = "primary_secondary",
-    OTHER = "other"
+    primary = "primary",
+    secondary = "secondary",
+    primary_and_secondary = "primary_and_secondary",
+    other = "other"
 }
 enum SchoolOwnership {
     GOVERNMENT_OWNED = "government",
