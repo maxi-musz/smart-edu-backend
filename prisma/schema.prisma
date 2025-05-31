@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SchoolType {
+  PRIMARY
+  SECONDARY
+  PRIMARY_SECONDARY
+}
+
+enum SchoolOwnership {
+  GOVERNMENT_OWNED
+  PRIVATE
+}
+
+enum SchoolStatus {
+  NOT_VERIFIED
+  PENDING
+  APPROVED
+  REJECTED
+  FAILED
+}
+
+model School {
+  id               String         @id @default(cuid())
+  school_name      String
+  school_email     String         @unique
+  school_phone     String
+  school_address   String
+  school_type      SchoolType
+  school_ownership SchoolOwnership
+  cac              String?
+  utility_bill     String?
+  tax_clearance    String?
+  status           SchoolStatus   @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// User model for students and teachers
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+

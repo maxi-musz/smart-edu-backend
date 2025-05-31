@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import * as colors from 'colors';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
+
+    constructor(private prisma: PrismaService) {}
     
     // Onboard new school
     async onboardSchool() {
