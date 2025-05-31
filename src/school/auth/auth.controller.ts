@@ -1,14 +1,14 @@
-import { Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { OnboardSchoolDto } from 'src/shared/dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
     constructor(private authService: AuthService) {}
 
     @Post('onboard-school')
-    onboardSchool() {
-
-        return this.authService.onboardSchool();
+    onboardSchool(@Body() dto: OnboardSchoolDto) {
+        return this.authService.onboardSchool(dto);
     }
 
     @Post('director-login-otp')

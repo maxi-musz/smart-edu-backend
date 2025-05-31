@@ -8,9 +8,17 @@ export class AuthService {
     constructor(private prisma: PrismaService) {}
     
     // Onboard new school
-    async onboardSchool() {
+    async onboardSchool(payload: any) {
 
         console.log(colors.blue('Onboarding a new school...'));
+
+        try {
+
+            console.log(colors.green(`new school data: ${JSON.stringify({ data: payload })}`));
+            
+        } catch (error) {
+            
+        }
         
         console.log(colors.magenta("Successfully onboarded a new school!"));
         
