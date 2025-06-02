@@ -1,6 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { OnboardSchoolDto } from 'src/shared/dto/auth.dto';
+import { OnboardSchoolDto, SignInDto } from 'src/shared/dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -18,6 +18,8 @@ export class AuthController {
     verifyOTP() {}
 
     @Post("sign-in")
-    signIn() {}
+    signIn(@Body() dto: SignInDto) {
+        return this.authService.signIn(dto);
+    }
 }
  

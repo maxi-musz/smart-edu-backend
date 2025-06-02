@@ -4,6 +4,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import * as argon from 'argon2';
 import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
 import { SchoolOwnership, SchoolType } from '@prisma/client';
+import { formatDate } from 'src/shared/helper-functions/formatter';
+import { SignInDto } from 'src/shared/dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,9 +18,14 @@ export class AuthService {
         console.log(colors.blue('Onboarding a new school...'));
         // console.log("payload: ", payload);
 
+        const defaultPassword = `${payload.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${payload.school_phone.slice(-4)}`;
+        console.log(colors.yellow("Default password: "), defaultPassword);
+
         try {
 
-            
+            // hash the password 
+            const hashedPassword = await argon.hash(defaultPassword);
+            console.log(colors.green("Hashed password: "), hashedPassword);
 
             // create a new school in the database
             const new_school = await this.prisma.school.create({
@@ -32,11 +39,32 @@ export class AuthService {
                 }
             })
 
+            // create new user also with email and hashed password
+            const new_user = await this.prisma.user.create({
+                data: {
+                    email: payload.school_email,
+                    password: hashedPassword,
+                    role: "school_director", 
+                    school_id: new_school.id, 
+                }
+            });
+
+            const formatted_response = {
+                id: new_school.id,
+                school_name: new_school.school_name,
+                school_email: new_school.school_email,
+                school_address: new_school.school_address,
+                created_at: formatDate(new_school.createdAt),
+                updated_at: formatDate(new_school.updatedAt),
+            }
+
+            console.log("New user: ", new_user);
+
             // return the newly created school
             console.log(colors.magenta("New school created successfully!"));
             return ResponseHelper.success(
                 "New school created successfully!",
-                new_school
+                formatted_response
             )
             
         } catch (error) {
@@ -57,6 +85,65 @@ export class AuthService {
     async verifyDirectorLoginOtp() {
         
         return "Director login OTP verified";
+    }
+
+    async signIn(payload: SignInDto) {
+        
+        console.log(colors.blue("Signing in..."));
+
+        try {
+
+            // find the user by email
+            const existing_user = await this.prisma.user.findUnique({
+                where: {
+                    email: payload.email,
+                }
+            });
+
+            // if user does not exist, return error
+            if (!existing_user) {
+                console.log(colors.red("User not found"));
+                return ResponseHelper.error(
+                    "User not found",
+                    null
+                );
+            }
+
+            // if user exists, compare the password with the hashed password
+            const passwordMatches = await argon.verify(existing_user.password, payload.password);
+
+            // if password matches, return success response with user data
+            if(!passwordMatches) {
+                console.log(colors.red("Password does not match"));
+                return ResponseHelper.error(
+                    "Password does not match",
+                    null
+                );
+            }
+
+            const formatted_response = {
+                id: existing_user.id,
+                email: existing_user.email,
+                role: existing_user.role,
+                school_id: existing_user.school_id,
+                created_at: formatDate(existing_user.createdAt),
+                updated_at: formatDate(existing_user.updatedAt),
+            }
+
+            // if password match,es return success response
+            console.log(colors.green("User signed in successfully!"));
+            return ResponseHelper.success(
+                "User signed in successfully!",
+                formatted_response
+            );
+            
+        } catch (error) {
+            console.log(colors.red("Error signing in: "), error);
+            return ResponseHelper.error(
+                "Error signing in",
+                error
+            );
+        }
     }
 
 
