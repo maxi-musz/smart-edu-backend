@@ -6,11 +6,17 @@ import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
 import { SchoolOwnership, SchoolType } from '@prisma/client';
 import { formatDate } from 'src/shared/helper-functions/formatter';
 import { SignInDto } from 'src/shared/dto/auth.dto';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
 
-    constructor(private prisma: PrismaService) {}
+    constructor(
+        private prisma: PrismaService,
+        private jwt: JwtService,
+        private config: ConfigService
+    ) {}
     
     // Onboard new school
     async onboardSchool(payload: any) {
@@ -87,6 +93,25 @@ export class AuthService {
         return "Director login OTP verified";
     }
 
+    async signToken(
+        userId: string,
+        email: string
+    ): Promise<{access_token: string}> {
+        const payload = {
+            sub: userId,
+            email
+        };
+
+        const token = await this.jwt.signAsync(payload, {
+            expiresIn: this.config.get('JWT_EXPIRES_IN'),
+            secret: this.config.get('JWT_SECRET')
+        });
+
+        return {
+            access_token: token
+        }
+    }
+
     async signIn(payload: SignInDto) {
         
         console.log(colors.blue("Signing in..."));
@@ -121,20 +146,11 @@ export class AuthService {
                 );
             }
 
-            const formatted_response = {
-                id: existing_user.id,
-                email: existing_user.email,
-                role: existing_user.role,
-                school_id: existing_user.school_id,
-                created_at: formatDate(existing_user.createdAt),
-                updated_at: formatDate(existing_user.updatedAt),
-            }
-
             // if password match,es return success response
             console.log(colors.green("User signed in successfully!"));
-            return ResponseHelper.success(
-                "User signed in successfully!",
-                formatted_response
+            return this.signToken(
+                existing_user.id,
+                existing_user.email
             );
             
         } catch (error) {
