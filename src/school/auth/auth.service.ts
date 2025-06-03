@@ -36,19 +36,19 @@ export class AuthService {
             // create a new school in the database
             const new_school = await this.prisma.school.create({
                 data: {
-                    school_name: payload.school_name,
-                    school_email: payload.school_email,
-                    school_address: payload.school_address,
+                    school_name: payload.school_name.toLowerCase(),
+                    school_email: payload.school_email.toLowerCase(),
+                    school_address: payload.school_address.toLowerCase(),
                     school_phone: payload.school_phone,
-                    school_type: payload.school_type,
-                    school_ownership: payload.school_ownership,
+                    school_type: payload.school_type.toLowerCase(),
+                    school_ownership: payload.school_ownership.toLowerCase(),
                 }
             })
 
             // create new user also with email and hashed password
             const new_user = await this.prisma.user.create({
                 data: {
-                    email: payload.school_email,
+                    email: payload.school_email.toLowerCase(),
                     password: hashedPassword,
                     role: "school_director", 
                     school_id: new_school.id, 

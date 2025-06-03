@@ -8,8 +8,9 @@ import { SchedulesModule } from './schedules/schedules.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SettingsModule } from './settings/settings.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { ClassesModule } from './classes/classes.module';
 
 @Module({
-  imports: [DashboardModule, TeachersModule, StudentsModule, FinanceModule, CoursesModule, SchedulesModule, NotificationsModule, SettingsModule, ProfilesModule]
+  imports: [DashboardModule, TeachersModule, StudentsModule, FinanceModule, CoursesModule, SchedulesModule, NotificationsModule, SettingsModule, ProfilesModule, ClassesModule]
 })
 export class DirectorModule {}
