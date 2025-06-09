@@ -1,12 +1,11 @@
 import { registerAs } from "@nestjs/config";
 
 export default registerAs('database', () => {
-  const env = process.env.NODE_ENV as 'development' | 'staging' | 'production' | undefined;
+  const env = process.env.NODE_ENV as 'development' | 'production' | undefined;
   console.log('Current NODE_ENV:', env);
 
-  const urls: Record<'development' | 'staging' | 'production', string | undefined> = {
+  const urls: Record<'development' | 'production', string | undefined> = {
     development: process.env.DATABASE_URL,
-    staging: process.env.DATABASE_URL_STAGING,
     production: process.env.DATABASE_URL_PRODUCTION,
   };
 

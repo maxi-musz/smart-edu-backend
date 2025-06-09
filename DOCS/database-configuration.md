@@ -1,6 +1,6 @@
 # Database Configuration Guide
 
-This guide explains how to set up and manage database connections for different environments (development, staging, production) in your NestJS application.
+This guide explains how to set up and manage database connections for development and production environments in your NestJS application.
 
 ## Environment Variables Setup
 
@@ -8,17 +8,16 @@ In your `.env` file, set up the following variables:
 
 ```env
 # Environment
-NODE_ENV=staging  # Options: development, staging, production
+NODE_ENV=development  # Options: development, production
 
 # Database URLs
 DATABASE_URL="postgresql://postgres:123@localhost:5434/smart-edu-db?schema=public"  # Development
-DATABASE_URL_STAGING="postgresql://user:pass@staging-db-url"  # Staging
 DATABASE_URL_PRODUCTION="postgresql://user:pass@production-db-url"  # Production
 ```
 
 ## Dynamic Database URL Configuration
 
-The application uses a dynamic approach to switch between different database URLs based on the `NODE_ENV`. This is handled by two main components:
+The application uses a dynamic approach to switch between development and production database URLs based on the `NODE_ENV`. This is handled by two main components:
 
 ### 1. Database Config (src/config/database.config.ts)
 
@@ -26,11 +25,10 @@ This configuration file reads the environment and selects the appropriate databa
 
 ```typescript
 export default registerAs('database', () => {
-  const env = process.env.NODE_ENV as 'development' | 'staging' | 'production' | undefined;
+  const env = process.env.NODE_ENV as 'development' | 'production' | undefined;
   
   const urls = {
     development: process.env.DATABASE_URL,
-    staging: process.env.DATABASE_URL_STAGING,
     production: process.env.DATABASE_URL_PRODUCTION,
   };
 
@@ -47,7 +45,6 @@ This script automatically modifies the Prisma schema to use the correct database
 ```javascript
 const envToDbUrl = {
   development: 'DATABASE_URL',
-  staging: 'DATABASE_URL_STAGING',
   production: 'DATABASE_URL_PRODUCTION'
 };
 ```
@@ -78,22 +75,89 @@ npm run prisma:generate
    npm run prisma:migrate
    ```
 
-2. **Staging Setup**:
-   ```bash
-   # Set environment to staging
-   NODE_ENV=staging
-   
-   # Run migrations on staging database
-   npm run prisma:migrate
-   ```
-
-3. **Production Setup**:
+2. **Production Setup**:
    ```bash
    # Set environment to production
    NODE_ENV=production
    
    # Run migrations on production database
    npm run prisma:migrate
+   ```
+
+## Render Configuration
+
+### Development Service on Render
+
+1. Create a new Web Service for development
+2. Set the following environment variables:
+   ```env
+   NODE_ENV=development
+   DATABASE_URL=your_development_db_url
+   PORT=10000  # or any port you prefer
+   ```
+
+3. Set the Build Command:
+   ```bash
+   npm install && npm run build
+   ```
+
+4. Set the Start Command:
+   ```bash
+   npm run start:deploy
+   ```
+
+### Production Service on Render
+
+1. Create a new Web Service for production
+2. Set the following environment variables:
+   ```env
+   NODE_ENV=production
+   DATABASE_URL_PRODUCTION=your_production_db_url
+   PORT=10000  # or any port you prefer
+   ```
+
+3. Set the Build Command:
+   ```bash
+   npm install && npm run build
+   ```
+
+4. Set the Start Command:
+   ```bash
+   npm run start:deploy
+   ```
+
+### Important Notes About Render Services
+
+1. **Same Commands, Different Environments**:
+   - Both services use the same build and start commands
+   - The environment variables determine which database to use
+   - `NODE_ENV` controls the behavior of the application
+
+2. **Development Service**:
+   - Use for testing and development
+   - Connects to your development database
+   - Can be used to test changes before production
+
+3. **Production Service**:
+   - Use for your live application
+   - Connects to your production database
+   - Should be stable and well-tested
+
+4. **Auto-Deploy Settings**:
+   - Development: Deploy from your development branch
+   - Production: Deploy from your main/master branch
+
+## Deployment Flow
+
+1. **Local Development**:
+   ```bash
+   NODE_ENV=development npm run start:dev
+   ```
+
+2. **Production Deployment**:
+   ```bash
+   # After testing locally
+   NODE_ENV=production npm run start:deploy
    ```
 
 ## Important Notes
@@ -114,34 +178,10 @@ If you encounter database connection issues:
 4. Check the logs for any connection errors
 5. Verify your database credentials are correct
 
-### Debugging Environment Variables
-
-To debug environment variable issues:
-
-1. Check the current environment:
-   ```bash
-   echo $NODE_ENV
-   ```
-
-2. Verify the environment variables are loaded:
-   ```bash
-   # The script will now show:
-   # - Current NODE_ENV
-   # - Selected database URL environment variable
-   # - The actual database URL being used
-   npm run prisma:use-env
-   ```
-
-3. If environment variables aren't loading:
-   - Make sure your `.env` file is in the root directory
-   - Check for any syntax errors in your `.env` file
-   - Ensure there are no spaces around the `=` sign in your `.env` file
-   - Try restarting your terminal/IDE
-
 ## Security Best Practices
 
-1. Use different databases for each environment
-2. Never use production credentials in development or staging
+1. Use different databases for development and production
+2. Never use production credentials in development
 3. Keep your `.env` file in `.gitignore`
 4. Use strong passwords for all database connections
 5. Regularly rotate database credentials
@@ -303,34 +343,4 @@ For both staging and production:
    - Verify all data and functionality after migration
 
 2. **Use migration locks**
-   - Prisma's `migrate deploy` command is safe for concurrent deployments
-   - It uses a lock to prevent multiple migrations running simultaneously
-
-3. **Backup before migration**
-   - Always ensure you have a recent backup of your production database
-   - Consider taking a backup right before migration
-
-4. **Monitor deployment logs**
-   - Watch the deployment logs for any migration errors
-   - Have a rollback plan ready
-
-5. **Consider zero-downtime deployments**
-   - For critical applications, consider using blue-green deployments
-   - This allows you to verify the new version before switching traffic
-
-### Migration Safety Checks
-
-The `prisma:migrate` command includes several safety features:
-- Checks if the database is in a consistent state
-- Verifies that all migrations can be applied
-- Uses transactions to ensure atomicity
-- Provides detailed error messages if something goes wrong
-
-### Rollback Strategy
-
-If a migration fails in production:
-
-1. Check the error logs
-2. If possible, fix the issue and redeploy
-3. If needed, restore from backup
-4. Consider using Prisma's `migrate reset` in staging to test the fix 
+   - Prisma's `migrate deploy`

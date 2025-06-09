@@ -18,12 +18,12 @@ import { memoryStorage } from 'multer';
       isGlobal: true, // Makes the configuration available globally
       envFilePath: '.env', // Path to your environment variables file
       load: [appConfig, databaseConfig],
-      validationSchema: joi.object({
-        NODE_ENV: joi.string().valid('development', 'staging', 'production').required(),
-        DATABASE_URL: joi.string().required(),
-        DATABASE_URL_STAGING: joi.string().required(),
-        DATABASE_URL_PRODUCTION: joi.string().required(),
-      }),
+      // validationSchema: joi.object({
+      //   NODE_ENV: joi.string().valid('development', 'staging', 'production').required(),
+      //   DATABASE_URL: joi.string().required(),
+      //   DATABASE_URL_STAGING: joi.string().required(),
+      //   DATABASE_URL_PRODUCTION: joi.string().required(),
+      // }),
     }),
     MulterModule.register({
       storage: memoryStorage(),
