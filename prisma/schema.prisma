@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL_STAGING")
+}
+
+enum SchoolType {
+  primary
+  secondary
+  primary_and_secondary
+}
+
+enum SchoolOwnership {
+  government
+  private
+}
+
+enum SchoolStatus {
+  not_verified
+  pending
+  approved
+  rejected
+  failed
+  suspended
+  closed
+  archived
+}
+
+model School {
+  id               String          @id @default(cuid())
+  school_name      String
+  school_email     String          @unique
+  school_phone     String
+  school_address   String
+  school_type      SchoolType
+  school_ownership SchoolOwnership
+  status           SchoolStatus    @default(pending)
+
+  cacId          String? @unique
+  utilityBillId  String? @unique
+  taxClearanceId String? @unique
+
+  cac           Document? @relation("CACDoc", fields: [cacId], references: [id])
+  utility_bill  Document? @relation("UtilityBillDoc", fields: [utilityBillId], references: [id])
+  tax_clearance Document? @relation("TaxClearanceDoc", fields: [taxClearanceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+}
+
+model Document {
+  id         String @id @default(cuid())
+  secure_url String
+  public_id  String
+
+  schoolCac          School? @relation("CACDoc")
+  schoolUtilityBill  School? @relation("UtilityBillDoc")
+  schoolTaxClearance School? @relation("TaxClearanceDoc")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  school_id String
+  email     String   @unique
+  password  String
+  role      Roles    @default(student)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [school_id], references: [id])
+}
+
+enum Roles {
+  student
+  teacher
+  school_director
+  admin
+  super_admin
+}
