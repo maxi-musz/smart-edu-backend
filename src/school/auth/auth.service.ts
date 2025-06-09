@@ -8,6 +8,8 @@ import { formatDate } from 'src/shared/helper-functions/formatter';
 import { SignInDto } from 'src/shared/dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { CloudinaryService } from 'src/shared/services/cloudinary.service';
+// import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -15,17 +17,20 @@ export class AuthService {
     constructor(
         private prisma: PrismaService,
         private jwt: JwtService,
-        private config: ConfigService
+        private config: ConfigService,
+        private readonly cloudinaryService: CloudinaryService
     ) {}
     
     // Onboard new school
-    async onboardSchool(payload: any) {
+    async onboardSchool(payload: any, files: Express.Multer.File[]) {
 
         console.log(colors.blue('Onboarding a new school...'));
         // console.log("payload: ", payload);
 
         const defaultPassword = `${payload.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${payload.school_phone.slice(-4)}`;
-        console.log(colors.yellow("Default password: "), defaultPassword);
+        // console.log(colors.yellow("Default password: "), defaultPassword);
+
+        const uploadedFiles = await this.cloudinaryService.uploadToCloudinary(files);
 
         try {
 
@@ -40,13 +45,32 @@ export class AuthService {
                     school_email: payload.school_email.toLowerCase(),
                     school_address: payload.school_address.toLowerCase(),
                     school_phone: payload.school_phone,
-                    school_type: payload.school_type.toLowerCase(),
-                    school_ownership: payload.school_ownership.toLowerCase(),
+                    school_type: payload.school_type.toLowerCase() as SchoolType,
+                    school_ownership: payload.school_ownership.toLowerCase() as SchoolOwnership,
+                    // Create and connect documents
+                    cac: uploadedFiles[0] ? {
+                        create: {
+                            secure_url: uploadedFiles[0].secure_url,
+                            public_id: uploadedFiles[0].public_id
+                        }
+                    } : undefined,
+                    utility_bill: uploadedFiles[1] ? {
+                        create: {
+                            secure_url: uploadedFiles[1].secure_url,
+                            public_id: uploadedFiles[1].public_id
+                        }
+                    } : undefined,
+                    tax_clearance: uploadedFiles[2] ? {
+                        create: {
+                            secure_url: uploadedFiles[2].secure_url,
+                            public_id: uploadedFiles[2].public_id
+                        }
+                    } : undefined,
                 }
-            })
+            });
 
             // create new user also with email and hashed password
-            const new_user = await this.prisma.user.create({
+            await this.prisma.user.create({
                 data: {
                     email: payload.school_email.toLowerCase(),
                     password: hashedPassword,
@@ -60,11 +84,14 @@ export class AuthService {
                 school_name: new_school.school_name,
                 school_email: new_school.school_email,
                 school_address: new_school.school_address,
+                documents: {
+                    cac: uploadedFiles[0]?.secure_url || null,
+                    utility_bill: uploadedFiles[1]?.secure_url || null,
+                    tax_clearance: uploadedFiles[2]?.secure_url || null,
+                },
                 created_at: formatDate(new_school.createdAt),
                 updated_at: formatDate(new_school.updatedAt),
-            }
-
-            console.log("New user: ", new_user);
+            };
 
             // return the newly created school
             console.log(colors.magenta("New school created successfully!"));
@@ -161,7 +188,6 @@ export class AuthService {
             );
         }
     }
-
 
 }
 

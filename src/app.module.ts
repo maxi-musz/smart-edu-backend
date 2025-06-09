@@ -9,6 +9,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import * as joi from 'joi';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
+import { MulterModule } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @Module({
   imports: [
@@ -16,6 +18,9 @@ import databaseConfig from './config/database.config';
       isGlobal: true, // Makes the configuration available globally
       envFilePath: '.env', // Path to your environment variables file
       load: [appConfig, databaseConfig],
+    }),
+    MulterModule.register({
+      storage: memoryStorage(),
     }),
     HelloModule, 
     AdminModule, 

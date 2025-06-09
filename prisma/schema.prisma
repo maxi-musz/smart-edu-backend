@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -43,10 +37,15 @@ model School {
   school_address   String
   school_type      SchoolType
   school_ownership SchoolOwnership
-  cac              String?
-  utility_bill     String?
-  tax_clearance    String?
   status           SchoolStatus    @default(pending)
+
+  cacId          String? @unique
+  utilityBillId  String? @unique
+  taxClearanceId String? @unique
+
+  cac           Document? @relation("CACDoc", fields: [cacId], references: [id])
+  utility_bill  Document? @relation("UtilityBillDoc", fields: [utilityBillId], references: [id])
+  tax_clearance Document? @relation("TaxClearanceDoc", fields: [taxClearanceId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,18 +53,26 @@ model School {
   users User[]
 }
 
-// User model for students and teachers
+model Document {
+  id         String @id @default(cuid())
+  secure_url String
+  public_id  String
+
+  schoolCac          School? @relation("CACDoc")
+  schoolUtilityBill  School? @relation("UtilityBillDoc")
+  schoolTaxClearance School? @relation("TaxClearanceDoc")
+}
+
 model User {
   id        String   @id @default(cuid())
   school_id String
   email     String   @unique
   password  String
+  role      Roles    @default(student)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  role      Roles @default(student)
 
-  school    School @relation(fields: [school_id], references: [id])
-  @@index([school_id])
+  school School @relation(fields: [school_id], references: [id])
 }
 
 enum Roles {
