@@ -23,28 +23,41 @@ export class AuthService {
     
     // Onboard new school
     async onboardSchool(payload: any, files: Express.Multer.File[]) {
-
+        
         console.log(colors.blue('Onboarding a new school...'));
-        // console.log("payload: ", payload);
-
-        const defaultPassword = `${payload.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${payload.school_phone.slice(-4)}`;
-        // console.log(colors.yellow("Default password: "), defaultPassword);
-
-        const uploadedFiles = await this.cloudinaryService.uploadToCloudinary(files);
-
+        
+        const existingSchool = await this.prisma.school.findFirst({
+            where: {
+                school_email: payload.email
+            }
+        })
+    
+        if(existingSchool) {
+            console.log("School already exists... ")
+            throw ResponseHelper.error(
+                "School already exists... "
+            )
+        }
+        
         try {
+
+
+            const defaultPassword = `${payload.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${payload.school_phone.slice(-4)}`;
+            // console.log(colors.yellow("Default password: "), defaultPassword);
+    
+            const uploadedFiles = await this.cloudinaryService.uploadToCloudinary(files);
 
             // hash the password 
             const hashedPassword = await argon.hash(defaultPassword);
             console.log(colors.green("Hashed password: "), hashedPassword);
 
             // create a new school in the database
-            const new_school = await this.prisma.school.create({
+            const school = await this.prisma.school.create({
                 data: {
                     school_name: payload.school_name.toLowerCase(),
                     school_email: payload.school_email.toLowerCase(),
-                    school_address: payload.school_address.toLowerCase(),
                     school_phone: payload.school_phone,
+                    school_address: payload.school_address.toLowerCase(),
                     school_type: payload.school_type.toLowerCase() as SchoolType,
                     school_ownership: payload.school_ownership.toLowerCase() as SchoolOwnership,
                     // Create and connect documents
@@ -66,6 +79,7 @@ export class AuthService {
                             public_id: uploadedFiles[2].public_id
                         }
                     } : undefined,
+                    status: 'pending'
                 }
             });
 
@@ -75,30 +89,27 @@ export class AuthService {
                     email: payload.school_email.toLowerCase(),
                     password: hashedPassword,
                     role: "school_director", 
-                    school_id: new_school.id, 
+                    school_id: school.id, 
                 }
             });
 
             const formatted_response = {
-                id: new_school.id,
-                school_name: new_school.school_name,
-                school_email: new_school.school_email,
-                school_address: new_school.school_address,
+                id: school.id,
+                school_name: school.school_name,
+                school_email: school.school_email,
+                school_address: school.school_address,
                 documents: {
                     cac: uploadedFiles[0]?.secure_url || null,
                     utility_bill: uploadedFiles[1]?.secure_url || null,
                     tax_clearance: uploadedFiles[2]?.secure_url || null,
                 },
-                created_at: formatDate(new_school.createdAt),
-                updated_at: formatDate(new_school.updatedAt),
+                created_at: formatDate(school.createdAt),
+                updated_at: formatDate(school.updatedAt),
             };
 
             // return the newly created school
             console.log(colors.magenta("New school created successfully!"));
-            return ResponseHelper.success(
-                "New school created successfully!",
-                formatted_response
-            )
+            return ResponseHelper.created('School onboarded successfully', formatted_response);
             
         } catch (error) {
             console.log(colors.red("Error creating new school: "), error);
