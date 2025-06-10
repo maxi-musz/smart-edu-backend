@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsNotEmpty, IsString, IsArray } from "class-validator";
 
 export class OnboardSchoolDto {
     @IsNotEmpty()
@@ -77,4 +77,11 @@ export class ResetPasswordDTO {
     @IsNotEmpty()
     email: string
 
+}
+
+export class OnboardClassesDto {
+    @IsNotEmpty({ message: 'Class names array cannot be empty' })
+    @IsArray({ message: 'Class names must be an array' })
+    @IsString({ each: true, message: 'Each class name must be a string' })
+    class_names: string[];
 }

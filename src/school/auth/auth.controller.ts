@@ -1,9 +1,13 @@
-import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode } from '@nestjs/common';
+import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode, UseGuards } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
-import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
+import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto } from 'src/shared/dto/auth.dto';
 import { FileValidationInterceptor } from 'src/shared/interceptors/file-validation.interceptor';
 import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
+import { AuthGuard } from '@nestjs/passport';
+import { JwtGuard } from './guard';
+import { GetUser } from './decorator';
+import { User } from 'generated/prisma';
 
 interface ErrorResponse {
     success: false;
@@ -81,6 +85,13 @@ export class AuthController {
     @HttpCode(200)
     resetPassword(@Body() dto: ResetPasswordDTO) {
         return this.authService.resetPassword(dto)
+    }
+
+    @UseGuards(JwtGuard)
+    @Post("onboard-classes")
+    @HttpCode(201)
+    onboardClasses(@Body() dto: OnboardClassesDto, @GetUser() user: User) {
+        return this.authService.onboardClasses(dto, user);
     }
 }
  

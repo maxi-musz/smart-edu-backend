@@ -13,6 +13,8 @@ import { sendOnboardingMailToSchoolOwner, sendOnboardingMailToBTechAdmin, sendPa
 import * as crypto from "crypto"
 import { Prisma } from '@prisma/client';
 import { ApiResponse } from 'src/shared/helper-functions/response';
+import { OnboardClassesDto } from 'src/shared/dto/auth.dto';
+import { User } from 'generated/prisma';
 
 interface CloudinaryUploadResult {
     secure_url: string;
@@ -189,18 +191,32 @@ export class AuthService {
         userId: string,
         email: string
     ): Promise<{access_token: string}> {
+        // console.log(colors.cyan('Signing token for:'), { userId, email });
+        
         const payload = {
             sub: userId,
             email
         };
 
-        const token = await this.jwt.signAsync(payload, {
-            expiresIn: this.config.get('JWT_EXPIRES_IN'),
-            secret: this.config.get('JWT_SECRET')
-        });
+        const secret = this.config.get('JWT_SECRET');
+        const expiresIn = this.config.get('JWT_EXPIRES_IN') || '7d'; 
+        
+        // console.log(colors.yellow('Token config:'), { secret, expiresIn });
 
-        return {
-            access_token: token
+        try {
+            const token = await this.jwt.signAsync(payload, {
+                expiresIn: expiresIn,
+                secret: secret
+            });
+
+            // console.log(colors.green('Token generated successfully'));
+            
+            return {
+                access_token: token
+            }
+        } catch (error) {
+            console.log(colors.red('Error generating token:'), error);
+            throw error;
         }
     }
 
@@ -424,7 +440,95 @@ export class AuthService {
         }
     }
 
-}
+    /////////////////////////////////////////////////////////// director onboarding 
+    async onboardClasses(dto: OnboardClassesDto, user: User) {
+        console.log(colors.cyan("Onboarding classes..."));
 
-// generate a hashed password
-            // const hashedPassword = await argon.hash(payload.password);
+        try {
+            // Check if school exists
+            const existingSchool = await this.prisma.school.findFirst({
+                where: { school_email: user.email}
+            });
+
+            if (!existingSchool) {
+                console.log(colors.red("School not found"));
+                throw new NotFoundException({
+                    success: false,
+                    message: "School not found",
+                    error: null,
+                    statusCode: 404
+                });
+            }
+
+            // Check if any of the classes already exist in the school
+            const existingClasses = await this.prisma.class.findMany({
+                where: {
+                    name: {
+                        in: dto.class_names
+                    },
+                    schoolId: existingSchool.id
+                }
+            });
+
+            if (existingClasses.length > 0) {
+                console.log(colors.red("Some classes already exist in this school"));
+                throw new BadRequestException({
+                    success: false,
+                    message: "Some classes already exist in this school",
+                    error: existingClasses.map(c => c.name),
+                    statusCode: 400
+                });
+            }
+
+            // Create the classes
+            await this.prisma.class.createMany({
+                data: dto.class_names.map(className => ({
+                    name: className.toLowerCase().replace(/\s+/g, ''),
+                    schoolId: existingSchool.id
+                }))
+            });
+
+            // Fetch the created classes
+            const createdClasses = await this.prisma.class.findMany({
+                where: {
+                    schoolId: existingSchool.id,
+                    name: {
+                        in: dto.class_names.map(name => name.toLowerCase().replace(/\s+/g, ''))
+                    }
+                }
+            });
+
+            console.log(colors.green("Classes created successfully!"));
+
+            const formatted_response = createdClasses.map(cls => ({
+                id: cls.id,
+                name: cls.name,
+                school_id: cls.schoolId,
+                class_teacher_id: cls.classTeacherId || null,
+                created_at: formatDate(cls.createdAt),
+                updated_at: formatDate(cls.updatedAt)
+            }));
+
+            return ResponseHelper.success(
+                "Classes created successfully",
+                formatted_response
+            );
+
+        } catch (error) {
+            console.log(colors.red("Error creating class: "), error);
+            
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            
+            throw new InternalServerErrorException({
+                success: false,
+                message: "Error creating class",
+                error: error.message,
+                statusCode: 500
+            });
+        }
+    }
+
+}
+ 
