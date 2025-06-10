@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum SchoolType {
@@ -64,13 +64,17 @@ model Document {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  school_id String
-  email     String   @unique
-  password  String
-  role      Roles    @default(student)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String    @id @default(cuid())
+  school_id         String
+  email             String    @unique
+  password          String
+  otp               String?   @default("")
+  otp_expires_at    DateTime?
+  is_email_verified Boolean?  @default(false)
+  is_otp_verified   Boolean?  @default(false)
+  role              Roles     @default(student)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   school School @relation(fields: [school_id], references: [id])
 }

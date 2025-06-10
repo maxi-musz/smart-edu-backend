@@ -3,6 +3,7 @@ import * as nodemailer from "nodemailer";
 import { onboardingMailTemplate } from "../email-templates/onboard-mail";
 import { ResponseHelper } from "src/shared/helper-functions/response.helpers";
 import { onboardingSchoolAdminNotificationTemplate } from "../email-templates/onboard-mail-admin";
+import { passwordResetTemplate } from "../email-templates/password-reset-template";
 
 // add the interface for the mail to send 
 export interface OnboardingMailPayload {
@@ -33,6 +34,13 @@ interface OnboardingAdminPayload {
     };
     defaultPassword: string | null;
 }
+
+interface SendResetOtpProps {
+    email: string;
+    otp: string;
+}
+
+
 ////////////////////////////////////////////////////////////            Send mail to school owner
 export const sendOnboardingMailToSchoolOwner = async (
     payload: OnboardingMailPayload
@@ -155,4 +163,32 @@ export const sendOnboardingMailToBTechAdmin = async (
     // };
   
     // await transporter.sendMail(mailOptions);
+  };
+  
+  ////////////////////////////////////////////////////////////             Send password reset email
+  export const sendPasswordResetOtp = async ({ email, otp }: SendResetOtpProps): Promise<void> => {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      host: process.env.GOOGLE_SMTP_HOST,
+      port: process.env.GOOGLE_SMTP_PORT ? parseInt(process.env.GOOGLE_SMTP_PORT) : 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+  
+    const htmlContent = passwordResetTemplate(otp);
+  
+    const mailOptions = {
+      from: {
+        name: 'Smart Edu Hub',
+        address: process.env.EMAIL_USER as string,
+      },
+      to: email,
+      subject: `🔐 Your Password Reset Code`,
+      html: htmlContent,
+    };
+  
+    await transporter.sendMail(mailOptions);
   };

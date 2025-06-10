@@ -47,3 +47,34 @@ export class SignInDto {
     @IsString()
     password: string;
 }
+
+export class RequestPasswordResetDTO {
+    @IsNotEmpty()
+    @IsString()
+    email: string
+}
+
+export class VerifyresetOtp {
+    @IsString()
+    @IsNotEmpty()
+    otp: string
+
+    @IsString()
+    @IsNotEmpty()
+    email: string
+}
+
+export class ResetPasswordDTO {
+    @IsString()
+    @IsNotEmpty()
+    new_password: string
+    
+    @IsString()
+    @IsNotEmpty()
+    confirm_password: string
+
+    @IsString()
+    @IsNotEmpty()
+    email: string
+
+}

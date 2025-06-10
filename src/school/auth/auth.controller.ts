@@ -1,7 +1,7 @@
-import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get } from '@nestjs/common';
+import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
-import { OnboardSchoolDto, SignInDto } from 'src/shared/dto/auth.dto';
+import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
 import { FileValidationInterceptor } from 'src/shared/interceptors/file-validation.interceptor';
 import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
 
@@ -60,8 +60,27 @@ export class AuthController {
     verifyOTP() {}
 
     @Post("sign-in")
+    @HttpCode(200)
     signIn(@Body() dto: SignInDto) {
         return this.authService.signIn(dto);
+    }
+
+    @Post("request-password-reset-otp")
+    @HttpCode(200)
+    requestPasswordResetOTP(@Body() dto: RequestPasswordResetDTO) {
+        return this.authService.requestPasswordResetOTP(dto)
+    }
+
+    @Post("verify-password-reset-otp")
+    @HttpCode(200)
+    verifyResetPasswordOTP(@Body() dto: VerifyresetOtp) {
+        return this.authService.verifyResetPasswordOTP(dto)
+    }
+
+    @Post("reset-password")
+    @HttpCode(200)
+    resetPassword(@Body() dto: ResetPasswordDTO) {
+        return this.authService.resetPassword(dto)
     }
 }
  
