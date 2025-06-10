@@ -139,4 +139,24 @@ export class CloudinaryService {
             );
         }
     }
+
+    async cleanupUploadedFiles(uploadResults: CloudinaryUploadResult[]): Promise<void> {
+        if (!uploadResults || uploadResults.length === 0) {
+            console.log(colors.yellow("No files to cleanup"));
+            return;
+        }
+
+        console.log(colors.yellow("Starting cleanup of uploaded files..."));
+        const publicIds = uploadResults.map(result => result.public_id);
+        
+        try {
+            await this.deleteFromCloudinary(publicIds);
+            console.log(colors.green("Cleanup completed successfully"));
+        } catch (error) {
+            console.log(colors.red("Error during cleanup process"));
+            // We don't throw here because this is a cleanup operation
+            // and we don't want to mask the original error
+            console.error(error);
+        }
+    }
 } 

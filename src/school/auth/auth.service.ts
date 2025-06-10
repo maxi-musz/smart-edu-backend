@@ -9,7 +9,13 @@ import { SignInDto } from 'src/shared/dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { CloudinaryService } from 'src/shared/services/cloudinary.service';
-// import * as bcrypt from 'bcrypt';
+import { sendOnboardingMailToSchoolOwner, sendOnboardingMailToBTechAdmin } from 'src/common/mailer/send-mail';
+
+interface CloudinaryUploadResult {
+    secure_url: string;
+    public_id: string;
+    original_filename: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -38,14 +44,12 @@ export class AuthService {
                 "School already exists... "
             )
         }
-        
+
+        let uploadedFiles: CloudinaryUploadResult[] = [];
         try {
-
-
             const defaultPassword = `${payload.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${payload.school_phone.slice(-4)}`;
-            // console.log(colors.yellow("Default password: "), defaultPassword);
     
-            const uploadedFiles = await this.cloudinaryService.uploadToCloudinary(files);
+            uploadedFiles = await this.cloudinaryService.uploadToCloudinary(files);
 
             // hash the password 
             const hashedPassword = await argon.hash(defaultPassword);
@@ -93,6 +97,44 @@ export class AuthService {
                 }
             });
 
+            // Try to send emails, but don't fail the whole operation if they fail
+            try {
+                // send mail to school owner
+                await sendOnboardingMailToSchoolOwner({
+                    school_name: payload.school_name,
+                    school_email: payload.school_email,
+                    school_phone: payload.school_phone,
+                    school_address: payload.school_address,
+                    school_type: payload.school_type,
+                    school_ownership: payload.school_ownership,
+                    documents: {
+                        cac: uploadedFiles[0]?.secure_url || null,
+                        utility_bill: uploadedFiles[1]?.secure_url || null,
+                        tax_clearance: uploadedFiles[2]?.secure_url || null,
+                    },
+                });
+
+                // send mail to admin
+                await sendOnboardingMailToBTechAdmin({
+                    school_name: payload.school_name,
+                    school_email: payload.school_email,
+                    school_phone: payload.school_phone,
+                    school_address: payload.school_address,
+                    school_type: payload.school_type,
+                    school_ownership: payload.school_ownership,
+                    documents: {
+                        cac: uploadedFiles[0]?.secure_url || null,
+                        utility_bill: uploadedFiles[1]?.secure_url || null,
+                        tax_clearance: uploadedFiles[2]?.secure_url || null,
+                    },
+                    defaultPassword: defaultPassword,
+                });
+            } catch (emailError) {
+                // Log the email error but don't fail the operation
+                console.log(colors.yellow("Warning: Failed to send emails: "), emailError);
+                // You might want to store this error in a log or database for later retry
+            }
+
             const formatted_response = {
                 id: school.id,
                 school_name: school.school_name,
@@ -113,6 +155,14 @@ export class AuthService {
             
         } catch (error) {
             console.log(colors.red("Error creating new school: "), error);
+            
+            // Only clean up files if the error occurred during school/user creation
+            // Not during email sending
+            if (uploadedFiles.length > 0 && !error.message?.includes('No recipients defined')) {
+                console.log(colors.yellow("Cleaning up uploaded files due to error..."));
+                await this.cloudinaryService.cleanupUploadedFiles(uploadedFiles);
+            }
+            
             return ResponseHelper.error(
                 "Error creating new school",
                 error
