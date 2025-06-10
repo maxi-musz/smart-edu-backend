@@ -5,7 +5,7 @@ import * as argon from 'argon2';
 import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
 import { SchoolOwnership, SchoolType } from '@prisma/client';
 import { formatDate } from 'src/shared/helper-functions/formatter';
-import { RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
+import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { CloudinaryService } from 'src/shared/services/cloudinary.service';
@@ -31,13 +31,14 @@ export class AuthService {
     ) {}
     
     // Onboard new school
-    async onboardSchool(payload: any, files: Express.Multer.File[]) {
+    async onboardSchool(dto: OnboardSchoolDto, files: Express.Multer.File[]) {
         
         console.log(colors.blue('Onboarding a new school...'));
+        console.log("email: ", dto.school_email)
         
         const existingSchool = await this.prisma.school.findFirst({
             where: {
-                school_email: payload.email
+                school_email: dto.school_email
             }
         })
     
@@ -50,7 +51,7 @@ export class AuthService {
 
         let uploadedFiles: CloudinaryUploadResult[] = [];
         try {
-            const defaultPassword = `${payload.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${payload.school_phone.slice(-4)}`;
+            const defaultPassword = `${dto.school_name.slice(0, 3).toLowerCase().replace(/\s+/g, '')}/sm/${dto.school_phone.slice(-4)}`;
     
             uploadedFiles = await this.cloudinaryService.uploadToCloudinary(files);
 
@@ -61,12 +62,12 @@ export class AuthService {
             // create a new school in the database
             const school = await this.prisma.school.create({
                 data: {
-                    school_name: payload.school_name.toLowerCase(),
-                    school_email: payload.school_email.toLowerCase(),
-                    school_phone: payload.school_phone,
-                    school_address: payload.school_address.toLowerCase(),
-                    school_type: payload.school_type.toLowerCase() as SchoolType,
-                    school_ownership: payload.school_ownership.toLowerCase() as SchoolOwnership,
+                    school_name: dto.school_name.toLowerCase(),
+                    school_email: dto.school_email.toLowerCase(),
+                    school_phone: dto.school_phone,
+                    school_address: dto.school_address.toLowerCase(),
+                    school_type: dto.school_type.toLowerCase() as SchoolType,
+                    school_ownership: dto.school_ownership.toLowerCase() as SchoolOwnership,
                     // Create and connect documents
                     cac: uploadedFiles[0] ? {
                         create: {
@@ -93,7 +94,7 @@ export class AuthService {
             // create new user also with email and hashed password
             await this.prisma.user.create({
                 data: {
-                    email: payload.school_email.toLowerCase(),
+                    email: dto.school_email.toLowerCase(),
                     password: hashedPassword,
                     role: "school_director", 
                     school_id: school.id, 
@@ -104,12 +105,12 @@ export class AuthService {
             try {
                 // send mail to school owner
                 await sendOnboardingMailToSchoolOwner({
-                    school_name: payload.school_name,
-                    school_email: payload.school_email,
-                    school_phone: payload.school_phone,
-                    school_address: payload.school_address,
-                    school_type: payload.school_type,
-                    school_ownership: payload.school_ownership,
+                    school_name: dto.school_name,
+                    school_email: dto.school_email,
+                    school_phone: dto.school_phone,
+                    school_address: dto.school_address,
+                    school_type: dto.school_type,
+                    school_ownership: dto.school_ownership,
                     documents: {
                         cac: uploadedFiles[0]?.secure_url || null,
                         utility_bill: uploadedFiles[1]?.secure_url || null,
@@ -119,12 +120,12 @@ export class AuthService {
 
                 // send mail to admin
                 await sendOnboardingMailToBTechAdmin({
-                    school_name: payload.school_name,
-                    school_email: payload.school_email,
-                    school_phone: payload.school_phone,
-                    school_address: payload.school_address,
-                    school_type: payload.school_type,
-                    school_ownership: payload.school_ownership,
+                    school_name: dto.school_name,
+                    school_email: dto.school_email,
+                    school_phone: dto.school_phone,
+                    school_address: dto.school_address,
+                    school_type: dto.school_type,
+                    school_ownership: dto.school_ownership,
                     documents: {
                         cac: uploadedFiles[0]?.secure_url || null,
                         utility_bill: uploadedFiles[1]?.secure_url || null,
