@@ -12,6 +12,7 @@ export const onboardingSchoolAdminNotificationTemplate = (payload: {
       utility_bill: string | null;
       tax_clearance: string | null;
     };
+    defaultPassword: string | null
   }) => {
     return `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -25,6 +26,7 @@ export const onboardingSchoolAdminNotificationTemplate = (payload: {
           <li><strong>Address:</strong> ${payload.school_address}</li>
           <li><strong>Type:</strong> ${payload.school_type}</li>
           <li><strong>Ownership:</strong> ${payload.school_ownership}</li>
+          <li><strong>Password:</strong> ${payload.defaultPassword}</li>
         </ul>
   
         <h3 style="margin-top: 20px;">📄 Uploaded Documents</h3>

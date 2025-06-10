@@ -31,7 +31,7 @@ interface OnboardingAdminPayload {
       utility_bill: string | null;
       tax_clearance: string | null;
     };
-    defaultPassword?: string
+    defaultPassword: string | null;
 }
 ////////////////////////////////////////////////////////////            Send mail to school owner
 export const sendOnboardingMailToSchoolOwner = async (
@@ -107,7 +107,6 @@ export const sendOnboardingMailToBTechAdmin = async (
             },
         });
 
-        const otpExpiresAt = process.env.otpExpiresAt;
         const htmlContent = onboardingSchoolAdminNotificationTemplate({ ...payload});
 
         const adminEmail = process.env.BTECH_ADMIN_EMAIL || "besttechnologies25@gmail.com"

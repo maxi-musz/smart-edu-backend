@@ -216,7 +216,7 @@ export class AuthService {
             // if user does not exist, return error
             if (!existing_user) {
                 console.log(colors.red("User not found"));
-                return ResponseHelper.error(
+                throw ResponseHelper.error(
                     "User not found",
                     null
                 );
