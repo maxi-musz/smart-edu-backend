@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsString, IsArray } from "class-validator";
+import { string } from "joi";
 
 export class OnboardSchoolDto {
     @IsNotEmpty()
@@ -52,6 +53,21 @@ export class RequestPasswordResetDTO {
     @IsNotEmpty()
     @IsString()
     email: string
+}
+export class RequestLoginOtpDTO {
+    @IsNotEmpty()
+    @IsString()
+    email: string
+}
+
+export class VerifyEmailOTPDto {
+    @IsString()
+    @IsNotEmpty()
+    email: string
+
+    @IsNotEmpty()
+    @IsString()
+    otp: string
 }
 
 export class VerifyresetOtp {

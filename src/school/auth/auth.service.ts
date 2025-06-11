@@ -5,11 +5,11 @@ import * as argon from 'argon2';
 import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
 import { SchoolOwnership, SchoolType } from '@prisma/client';
 import { formatDate } from 'src/shared/helper-functions/formatter';
-import { OnboardDataDto, OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
+import { OnboardDataDto, OnboardSchoolDto, RequestLoginOtpDTO, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyEmailOTPDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { CloudinaryService } from 'src/shared/services/cloudinary.service';
-import { sendOnboardingMailToSchoolOwner, sendOnboardingMailToBTechAdmin, sendPasswordResetOtp } from 'src/common/mailer/send-mail';
+import { sendOnboardingMailToSchoolOwner, sendOnboardingMailToBTechAdmin, sendPasswordResetOtp, sendLoginOtpByMail } from 'src/common/mailer/send-mail';
 import * as crypto from "crypto"
 import { Prisma } from '@prisma/client';
 import { ApiResponse } from 'src/shared/helper-functions/response';
@@ -179,14 +179,94 @@ export class AuthService {
     }
 
     // Direcotr login with OTP
-    async directorLoginOtp() {
-        return "Director login OTP";
+    async directorRequestLoginOtp(dto: RequestLoginOtpDTO) {
+
+        console.log(colors.cyan("Director requesting login otp..."))
+
+        try {
+            
+            // Check if user exists
+            const user = await this.prisma.school.findUnique({
+                where: { school_email: dto.email },
+            });
+    
+            if (!user) {
+                console.log(colors.red("❌ Admin User not found"));
+                throw new NotFoundException("Admin User not found");
+            }
+    
+            const otp = crypto.randomInt(1000, 9999).toString();
+            const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
+    
+            // Update OTP for the user
+            await this.prisma.user.update({
+                where: { email: dto.email },
+                data: {
+                    otp,
+                    otp_expires_at: otpExpiresAt,
+                },
+            });
+
+            await sendLoginOtpByMail({ email: dto.email, otp })
+            console.log(colors.magenta(`Login otp: ${otp} sucessfully sent to: ${dto.email}`))
+
+            return new ApiResponse(
+                true,
+                "Otp successfully sent"
+            )
+
+        } catch (error) {
+            console.log(colors.red("Error sigining in"))
+            throw new InternalServerErrorException(
+                `Failed to process OTP request: ${error instanceof Error ? error.message : String(error)}`
+            ); 
+        }
     }
 
     // Verify director login OTP
-    async verifyDirectorLoginOtp() {
-        
-        return "Director login OTP verified";
+    async verifyEmailOTPAndSignIn(dto: VerifyEmailOTPDto) {
+
+        console.log(colors.cyan(`Verifying email: ${dto.email} with OTP: ${dto.otp}`));
+    
+        try {
+            // Find user with matching email and OTP
+            const user = await this.prisma.user.findFirst({
+                where: { email: dto.email, otp: dto.otp },
+            });
+    
+            // Check if user exists and OTP is valid
+            if (!user || !user.otp_expires_at || new Date() > new Date(user.otp_expires_at)) {
+                console.log(colors.red("Invalid or expired OTP provided"));
+                throw new BadRequestException("Invalid or expired OTP provided");
+            }
+    
+            // Update `is_email_verified` and clear OTP
+            await this.prisma.user.update({
+                where: { email: dto.email },
+                data: {
+                    is_email_verified: true,
+                    otp: "",
+                    otp_expires_at: null,
+                },
+            });
+    
+            console.log(colors.magenta("Email address successfully verified"));
+
+            // Sign in the user and return token
+            return ResponseHelper.success(
+                "Login successful",
+                await this.signToken(user.id, user.email)
+            );
+        } catch (error) {
+            
+            console.error("Error verifying email:", error);
+    
+            if (error instanceof HttpException) {
+                throw error; // Re-throw known exceptions
+            }
+    
+            throw new InternalServerErrorException("Email verification failed");
+        }
     }
 
     async signToken(

@@ -1,7 +1,7 @@
 import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode, UseGuards, Request } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
-import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto, OnboardDataDto } from 'src/shared/dto/auth.dto';
+import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto, OnboardDataDto, RequestLoginOtpDTO, VerifyEmailOTPDto } from 'src/shared/dto/auth.dto';
 import { FileValidationInterceptor } from 'src/shared/interceptors/file-validation.interceptor';
 
 import { JwtGuard } from './guard';
@@ -55,10 +55,14 @@ export class AuthController {
     }
 
     @Post('director-login-otp')
-    signUp() {}
+    signUp(@Body() dto: RequestLoginOtpDTO) {
+        return this.authService.directorRequestLoginOtp(dto)
+    }
 
     @Post("director-verify-login-otp")
-    verifyOTP() {}
+    verifyEmailOTPAndSignIn(@Body() dto: VerifyEmailOTPDto) {
+        return this.authService.verifyEmailOTPAndSignIn(dto)
+    }
 
     @Post("sign-in")
     @HttpCode(200)
