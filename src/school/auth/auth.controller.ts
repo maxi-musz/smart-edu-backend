@@ -1,13 +1,10 @@
-import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode, UseGuards, Request } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto, OnboardDataDto } from 'src/shared/dto/auth.dto';
 import { FileValidationInterceptor } from 'src/shared/interceptors/file-validation.interceptor';
-import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
-import { AuthGuard } from '@nestjs/passport';
+
 import { JwtGuard } from './guard';
-import { GetUser } from './decorator';
-import { User } from 'generated/prisma';
 
 interface ErrorResponse {
     success: false;
@@ -90,36 +87,36 @@ export class AuthController {
     @UseGuards(JwtGuard)
     @Post("onboard-classes")
     @HttpCode(201)
-    onboardClasses(@Body() dto: OnboardClassesDto, @GetUser() user: User) {
-        return this.authService.onboardClasses(dto, user);
+    onboardClasses(@Body() dto: OnboardClassesDto, @Request() req: any) {
+        return this.authService.onboardClasses(dto, req.user);
     }
 
     @UseGuards(JwtGuard)
     @Post("onboard-teachers")
     @HttpCode(201)
-    onboardTeachers(@Body() dto: OnboardTeachersDto, @GetUser() user: User) {
-        return this.authService.onboardTeachers(dto, user);
+    onboardTeachers(@Body() dto: OnboardTeachersDto, @Request() req: any) {
+        return this.authService.onboardTeachers(dto, req.user);
     }
 
     @UseGuards(JwtGuard)
     @Post("onboard-students")
     @HttpCode(201)
-    onboardStudents(@Body() dto: OnboardStudentsDto, @GetUser() user: User) {
-        return this.authService.onboardStudents(dto, user);
+    onboardStudents(@Body() dto: OnboardStudentsDto, @Request() req: any) {
+        return this.authService.onboardStudents(dto, req.user);
     }
 
     @UseGuards(JwtGuard)
     @Post("onboard-directors")
     @HttpCode(201)
-    onboardDirectors(@Body() dto: OnboardDirectorsDto, @GetUser() user: User) {
-        return this.authService.onboardDirectors(dto, user);
+    onboardDirectors(@Body() dto: OnboardDirectorsDto, @Request() req: any) {
+        return this.authService.onboardDirectors(dto, req.user);
     }
 
     @UseGuards(JwtGuard)
     @Post("onboard-data")
     @HttpCode(201)
-    onboardData(@Body() dto: OnboardDataDto, @GetUser() user: User) {
-        return this.authService.onboardData(dto, user);
+    onboardData(@Body() dto: OnboardDataDto, @Request() req: any) {
+        return this.authService.onboardData(dto, req.user);
     }
 }
  

@@ -14,7 +14,6 @@ import * as crypto from "crypto"
 import { Prisma } from '@prisma/client';
 import { ApiResponse } from 'src/shared/helper-functions/response';
 import { OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto } from 'src/shared/dto/auth.dto';
-import { User } from 'generated/prisma';
 
 interface CloudinaryUploadResult {
     secure_url: string;
@@ -444,7 +443,7 @@ export class AuthService {
     }
 
     /////////////////////////////////////////////////////////// director onboarding 
-    async onboardClasses(dto: OnboardClassesDto, user: User) {
+    async onboardClasses(dto: OnboardClassesDto, user: any) {
         console.log(colors.cyan("Onboarding classes..."));
 
         try {
@@ -533,7 +532,7 @@ export class AuthService {
         }
     }
 
-    async onboardTeachers(dto: OnboardTeachersDto, user: User) {
+    async onboardTeachers(dto: OnboardTeachersDto, user: any) {
         console.log(colors.cyan("Onboarding teachers..."));
 
         try {
@@ -642,7 +641,7 @@ export class AuthService {
         }
     }
 
-    async onboardStudents(dto: OnboardStudentsDto, user: User) {
+    async onboardStudents(dto: OnboardStudentsDto, user: any) {
         console.log(colors.cyan("Onboarding students..."));
 
         try {
@@ -799,7 +798,7 @@ export class AuthService {
         }
     }
 
-    async onboardDirectors(dto: OnboardDirectorsDto, user: User) {
+    async onboardDirectors(dto: OnboardDirectorsDto, user: any) {
         console.log(colors.cyan("Onboarding directors..."));
 
         try {
@@ -908,8 +907,10 @@ export class AuthService {
         }
     }
 
-    async onboardData(dto: OnboardDataDto, user: User) {
+    async onboardData(dto: OnboardDataDto, user: any) {
         console.log(colors.cyan("Starting comprehensive onboarding process..."));
+
+        console.log("user: ", user)
 
         try {
             // Check if school exists
