@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { HelloModule } from './hello/hello.module';
 import { AdminModule } from './admin/admin.module';
 import { SchoolModule } from './school/school.module';
+import { SchedulesModule } from './school/director/schedules/schedules.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import * as joi from 'joi';
@@ -30,7 +31,9 @@ import { memoryStorage } from 'multer';
     }),
     HelloModule, 
     AdminModule, 
-    SchoolModule, PrismaModule
+    SchoolModule, 
+    SchedulesModule,
+    PrismaModule
   ],
   controllers: [AppController],
   providers: [AppService],

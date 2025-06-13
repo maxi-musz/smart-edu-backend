@@ -29,6 +29,36 @@ enum SchoolStatus {
   archived
 }
 
+enum PaymentType {
+  full
+  partial
+}
+
+enum TransactionType {
+  credit
+  debit
+}
+
+enum NotificationType {
+  all
+  teachers
+  students
+  school_director
+  admin
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum AcademicTerm {
+  first
+  second
+  third
+}
+
 model School {
   id               String          @id @default(cuid())
   school_name      String
@@ -38,6 +68,10 @@ model School {
   school_type      SchoolType
   school_ownership SchoolOwnership
   status           SchoolStatus    @default(pending)
+  current_term     AcademicTerm    @default(first)
+  current_year     Int             @default(2024)
+  term_start_date  DateTime?
+  term_end_date    DateTime?
 
   cacId          String? @unique
   utilityBillId  String? @unique
@@ -50,9 +84,13 @@ model School {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  classes  Class[]
-  subjects Subject[]
+  users         User[]
+  classes       Class[]
+  subjects      Subject[]
+  finance       Finance?
+  schedules     TimetableEntry[]
+  timeSlots     TimeSlot[]
+  notifications Notification[]
 }
 
 model Document {
@@ -66,26 +104,32 @@ model Document {
 }
 
 model User {
-  id                String    @id @default(cuid())
+  id                String     @id @default(cuid())
   school_id         String
-  email             String    @unique
+  email             String     @unique
   password          String
   first_name        String
   last_name         String
   phone_number      String
-  otp               String?   @default("")
+  display_picture   String? // URL to the profile picture
+  gender            Gender     @default(other)
+  otp               String?    @default("")
   otp_expires_at    DateTime?
-  is_email_verified Boolean?  @default(false)
-  is_otp_verified   Boolean?  @default(false)
-  role              Roles     @default(student)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  is_email_verified Boolean?   @default(false)
+  is_otp_verified   Boolean?   @default(false)
+  role              Roles      @default(student)
+  status            UserStatus @default(active)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   // relations
-  school           School    @relation(fields: [school_id], references: [id])
-  subjectsTeaching Subject[] @relation("TeacherSubject")
-  classesEnrolled  Class[]   @relation("StudentClass")
-  classesManaging  Class[]   @relation("ClassTeacher") // class teacher relationship
+  school            School               @relation(fields: [school_id], references: [id])
+  subjectsTeaching  TeacherSubject[]
+  classesEnrolled   Class[]              @relation("StudentClass")
+  classesManaging   Class[]              @relation("ClassTeacher") // class teacher relationship
+  payments          Payment[]            @relation("StudentPayment")
+  schedulesTeaching TimetableEntry[]     @relation("TeacherSchedule")
+  performances      StudentPerformance[] @relation("StudentPerformance")
 }
 
 enum Roles {
@@ -94,6 +138,12 @@ enum Roles {
   school_director
   admin
   super_admin
+}
+
+enum UserStatus {
+  active
+  suspended
+  inactive
 }
 
 model Class {
@@ -107,21 +157,157 @@ model Class {
   students     User[]    @relation("StudentClass")
   subjects     Subject[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  payments     Payment[]
+  schedules    TimetableEntry[]
+  performances StudentPerformance[]
 }
 
 model Subject {
-  id        String @id @default(cuid())
-  name      String // e.g., "Mathematics"
-  classId   String
-  teacherId String
+  id          String  @id @default(cuid())
+  name        String // e.g., "Mathematics"
+  code        String? // e.g., "MATH101"
+  color       String  @default("#3B82F6") // Hex color for UI
+  description String?
+  schoolId    String
+
+  school           School           @relation(fields: [schoolId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  timetableEntries TimetableEntry[]
+  teacherSubjects  TeacherSubject[]
+  Class            Class?           @relation(fields: [classId], references: [id])
+  classId          String?
+
+  @@unique([code, schoolId])
+}
+
+model Finance {
+  id               String   @id @default(cuid())
+  school_id        String   @unique
+  total_revenue    Float    @default(0)
+  outstanding_fee  Float    @default(0)
+  amount_withdrawn Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // relations
+  school   School    @relation(fields: [school_id], references: [id])
+  payments Payment[]
+}
+
+model Payment {
+  id               String          @id @default(cuid())
+  finance_id       String
+  student_id       String
+  class_id         String
+  payment_for      String // e.g., "Tuition Fee", "Exam Fee", etc.
+  amount           Float
+  payment_type     PaymentType
+  transaction_type TransactionType
+  payment_date     DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  // relations
+  finance Finance @relation(fields: [finance_id], references: [id])
+  student User    @relation("StudentPayment", fields: [student_id], references: [id])
+  class   Class   @relation(fields: [class_id], references: [id])
+}
+
+model TimetableEntry {
+  id          String    @id @default(cuid())
+  class_id    String
+  subject_id  String
+  teacher_id  String
+  school_id   String
+  timeSlotId  String
+  day_of_week DayOfWeek
+  room        String?
+  notes       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // relations
+  class    Class    @relation(fields: [class_id], references: [id])
+  subject  Subject  @relation(fields: [subject_id], references: [id])
+  teacher  User     @relation("TeacherSchedule", fields: [teacher_id], references: [id])
+  timeSlot TimeSlot @relation(fields: [timeSlotId], references: [id])
+  school   School   @relation(fields: [school_id], references: [id])
+
+  @@unique([class_id, timeSlotId, day_of_week])
+  @@index([teacher_id, timeSlotId, day_of_week])
+  @@index([school_id, day_of_week, timeSlotId])
+}
+
+model TimeSlot {
+  id        String   @id @default(cuid())
+  startTime String // Format: "HH:mm" (e.g., "08:30", "11:45")
+  endTime   String // Format: "HH:mm" (e.g., "10:30", "13:45")
+  label     String // e.g., "Period 1", "Morning Break", etc.
+  order     Int // For sorting periods in order
   schoolId  String
-
-  class   Class  @relation(fields: [classId], references: [id])
-  teacher User   @relation("TeacherSubject", fields: [teacherId], references: [id])
-  school  School @relation(fields: [schoolId], references: [id])
-
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  school           School           @relation(fields: [schoolId], references: [id])
+  timetableEntries TimetableEntry[]
+
+  @@unique([startTime, endTime, schoolId])
+  @@index([order])
+  @@index([schoolId, startTime, endTime])
+}
+
+model TeacherSubject {
+  id        String @id @default(cuid())
+  teacherId String
+  subjectId String
+
+  teacher User    @relation(fields: [teacherId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@unique([teacherId, subjectId])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  school_id   String
+  title       String
+  description String
+  type        NotificationType
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // relations
+  school School @relation(fields: [school_id], references: [id])
+}
+
+model StudentPerformance {
+  id          String   @id @default(cuid())
+  student_id  String
+  class_id    String
+  term        Int // 1, 2, or 3
+  year        Int
+  total_score Float
+  max_score   Float
+  position    Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // relations
+  student User  @relation("StudentPerformance", fields: [student_id], references: [id])
+  class   Class @relation(fields: [class_id], references: [id])
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }
