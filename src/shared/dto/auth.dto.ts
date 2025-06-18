@@ -192,3 +192,9 @@ export class OnboardDataDto {
     @IsArray({ message: 'Directors must be an array' })
     directors?: DirectorDto[];
 }
+
+export class loggedInUserProfileDto {
+    @IsNotEmpty()
+    @IsString()
+    email: string
+}

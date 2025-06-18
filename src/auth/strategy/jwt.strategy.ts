@@ -4,6 +4,13 @@ import { PassportStrategy } from "@nestjs/passport";
 import { Strategy, ExtractJwt } from "passport-jwt";
 import * as colors from 'colors';
 
+interface JwtPayload {
+    sub: string;
+    email: string;
+    iat: number;
+    exp: number;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(
     Strategy,
@@ -20,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(
         });
     }
 
-    async validate(payload: any) {
+    async validate(payload: JwtPayload) {
         console.log(colors.yellow('JWT Strategy - Validating payload:'), payload);
         
         if (!payload) {
@@ -43,6 +50,11 @@ export class JwtStrategy extends PassportStrategy(
         }
 
         console.log(colors.green('JWT Strategy - Token validated successfully'));
-        return payload;
+        
+        // Return a user object that will be available in the request
+        return {
+            id: payload.sub,
+            email: payload.email
+        };
     }
 }

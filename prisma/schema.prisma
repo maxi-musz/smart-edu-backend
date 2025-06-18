@@ -7,137 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum SchoolType {
-  primary
-  secondary
-  primary_and_secondary
-}
-
-enum SchoolOwnership {
-  government
-  private
-}
-
-enum SchoolStatus {
+enum StoreStatus {
   not_verified
   pending
   approved
   rejected
-  failed
   suspended
   closed
   archived
 }
 
-enum PaymentType {
-  full
-  partial
-}
-
-enum TransactionType {
-  credit
-  debit
-}
-
-enum NotificationType {
-  all
-  teachers
-  students
-  school_director
-  admin
-}
-
-enum Gender {
-  male
-  female
-  other
-}
-
-enum AcademicTerm {
-  first
-  second
-  third
-}
-
-model School {
-  id               String          @id @default(cuid())
-  school_name      String
-  school_email     String          @unique
-  school_phone     String
-  school_address   String
-  school_type      SchoolType
-  school_ownership SchoolOwnership
-  status           SchoolStatus    @default(pending)
-  current_term     AcademicTerm    @default(first)
-  current_year     Int             @default(2024)
-  term_start_date  DateTime?
-  term_end_date    DateTime?
-
-  cacId          String? @unique
-  utilityBillId  String? @unique
-  taxClearanceId String? @unique
-
-  cac           Document? @relation("CACDoc", fields: [cacId], references: [id])
-  utility_bill  Document? @relation("UtilityBillDoc", fields: [utilityBillId], references: [id])
-  tax_clearance Document? @relation("TaxClearanceDoc", fields: [taxClearanceId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users         User[]
-  classes       Class[]
-  subjects      Subject[]
-  finance       Finance?
-  schedules     TimetableEntry[]
-  timeSlots     TimeSlot[]
-  notifications Notification[]
-}
-
-model Document {
-  id         String @id @default(cuid())
-  secure_url String
-  public_id  String
-
-  schoolCac          School? @relation("CACDoc")
-  schoolUtilityBill  School? @relation("UtilityBillDoc")
-  schoolTaxClearance School? @relation("TaxClearanceDoc")
-}
-
-model User {
-  id                String     @id @default(cuid())
-  school_id         String
-  email             String     @unique
-  password          String
-  first_name        String
-  last_name         String
-  phone_number      String
-  display_picture   String? // URL to the profile picture
-  gender            Gender     @default(other)
-  otp               String?    @default("")
-  otp_expires_at    DateTime?
-  is_email_verified Boolean?   @default(false)
-  is_otp_verified   Boolean?   @default(false)
-  role              Roles      @default(student)
-  status            UserStatus @default(active)
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-
-  // relations
-  school            School               @relation(fields: [school_id], references: [id])
-  subjectsTeaching  TeacherSubject[]
-  classesEnrolled   Class[]              @relation("StudentClass")
-  classesManaging   Class[]              @relation("ClassTeacher") // class teacher relationship
-  payments          Payment[]            @relation("StudentPayment")
-  schedulesTeaching TimetableEntry[]     @relation("TeacherSchedule")
-  performances      StudentPerformance[] @relation("StudentPerformance")
-}
-
-enum Roles {
-  student
-  teacher
-  school_director
-  admin
+enum UserRole {
   super_admin
+  admin
+  inventory_manager
+  shipment_manager
+  marketer
+  user
 }
 
 enum UserStatus {
@@ -146,168 +32,230 @@ enum UserStatus {
   inactive
 }
 
-model Class {
-  id             String  @id @default(cuid())
-  name           String
-  schoolId       String
-  classTeacherId String?
-
-  school       School    @relation(fields: [schoolId], references: [id])
-  classTeacher User?     @relation("ClassTeacher", fields: [classTeacherId], references: [id])
-  students     User[]    @relation("StudentClass")
-  subjects     Subject[]
-
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  payments     Payment[]
-  schedules    TimetableEntry[]
-  performances StudentPerformance[]
+enum OrderStatus {
+  pending
+  confirmed
+  shipped
+  in_transit
+  delivered
+  cancelled
 }
 
-model Subject {
-  id          String  @id @default(cuid())
-  name        String // e.g., "Mathematics"
-  code        String? // e.g., "MATH101"
-  color       String  @default("#3B82F6") // Hex color for UI
+enum CommissionStatus {
+  pending
+  paid
+  reversed
+  cancelled
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+model Store {
+  id          String      @id @default(cuid())
+  name        String
   description String?
-  schoolId    String
+  email       String      @unique
+  phone       String
+  address     String
+  logo        String?
+  status      StoreStatus @default(pending)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
-  school           School           @relation(fields: [schoolId], references: [id])
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  timetableEntries TimetableEntry[]
-  teacherSubjects  TeacherSubject[]
-  Class            Class?           @relation(fields: [classId], references: [id])
-  classId          String?
+  // Document verification
+  cacId          String? @unique
+  utilityBillId  String? @unique
+  taxClearanceId String? @unique
 
-  @@unique([code, schoolId])
+  cac           Document? @relation("CACDoc", fields: [cacId], references: [id])
+  utility_bill  Document? @relation("UtilityBillDoc", fields: [utilityBillId], references: [id])
+  tax_clearance Document? @relation("TaxClearanceDoc", fields: [taxClearanceId], references: [id])
+
+  // Relations
+  products      Product[]
+  users         User[]
+  orders        Order[]
+  categories    Category[]
+  notifications Notification[]
 }
 
-model Finance {
-  id               String   @id @default(cuid())
-  school_id        String   @unique
-  total_revenue    Float    @default(0)
-  outstanding_fee  Float    @default(0)
-  amount_withdrawn Float    @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model Document {
+  id         String @id @default(cuid())
+  secure_url String
+  public_id  String
 
-  // relations
-  school   School    @relation(fields: [school_id], references: [id])
-  payments Payment[]
+  storeCac          Store? @relation("CACDoc")
+  storeUtilityBill  Store? @relation("UtilityBillDoc")
+  storeTaxClearance Store? @relation("TaxClearanceDoc")
 }
 
-model Payment {
-  id               String          @id @default(cuid())
-  finance_id       String
-  student_id       String
-  class_id         String
-  payment_for      String // e.g., "Tuition Fee", "Exam Fee", etc.
-  amount           Float
-  payment_type     PaymentType
-  transaction_type TransactionType
-  payment_date     DateTime        @default(now())
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+model User {
+  id                String     @id @default(cuid())
+  store_id          String?
+  email             String     @unique
+  password          String
+  first_name        String
+  last_name         String
+  phone_number      String
+  display_picture   String?
+  gender            Gender     @default(other)
+  role              UserRole   @default(user)
+  status            UserStatus @default(active)
+  otp               String?    @default("")
+  otp_expires_at    DateTime?
+  is_email_verified Boolean?   @default(false)
+  is_otp_verified   Boolean?   @default(false)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  // relations
-  finance Finance @relation(fields: [finance_id], references: [id])
-  student User    @relation("StudentPayment", fields: [student_id], references: [id])
-  class   Class   @relation(fields: [class_id], references: [id])
+  // Relations
+  store       Store?       @relation(fields: [store_id], references: [id])
+  orders      Order[]
+  cart        Cart?
+  referrals   Referral[]   @relation("Referrer")
+  referredBy  Referral[]   @relation("Referred")
+  commissions Commission[]
 }
 
-model TimetableEntry {
-  id          String    @id @default(cuid())
-  class_id    String
-  subject_id  String
-  teacher_id  String
-  school_id   String
-  timeSlotId  String
-  day_of_week DayOfWeek
-  room        String?
-  notes       String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // relations
-  class    Class    @relation(fields: [class_id], references: [id])
-  subject  Subject  @relation(fields: [subject_id], references: [id])
-  teacher  User     @relation("TeacherSchedule", fields: [teacher_id], references: [id])
-  timeSlot TimeSlot @relation(fields: [timeSlotId], references: [id])
-  school   School   @relation(fields: [school_id], references: [id])
-
-  @@unique([class_id, timeSlotId, day_of_week])
-  @@index([teacher_id, timeSlotId, day_of_week])
-  @@index([school_id, day_of_week, timeSlotId])
-}
-
-model TimeSlot {
-  id        String   @id @default(cuid())
-  startTime String // Format: "HH:mm" (e.g., "08:30", "11:45")
-  endTime   String // Format: "HH:mm" (e.g., "10:30", "13:45")
-  label     String // e.g., "Period 1", "Morning Break", etc.
-  order     Int // For sorting periods in order
-  schoolId  String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  school           School           @relation(fields: [schoolId], references: [id])
-  timetableEntries TimetableEntry[]
-
-  @@unique([startTime, endTime, schoolId])
-  @@index([order])
-  @@index([schoolId, startTime, endTime])
-}
-
-model TeacherSubject {
-  id        String @id @default(cuid())
-  teacherId String
-  subjectId String
-
-  teacher User    @relation(fields: [teacherId], references: [id])
-  subject Subject @relation(fields: [subjectId], references: [id])
-
-  @@unique([teacherId, subjectId])
-}
-
-model Notification {
-  id          String           @id @default(cuid())
-  school_id   String
-  title       String
-  description String
-  type        NotificationType
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  // relations
-  school School @relation(fields: [school_id], references: [id])
-}
-
-model StudentPerformance {
+model Product {
   id          String   @id @default(cuid())
-  student_id  String
-  class_id    String
-  term        Int // 1, 2, or 3
-  year        Int
-  total_score Float
-  max_score   Float
-  position    Int?
+  name        String
+  description String?
+  price       Float
+  stock       Int
+  images      String[]
+  categoryId  String
+  storeId     String
+  commission  Float    @default(0)
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // relations
-  student User  @relation("StudentPerformance", fields: [student_id], references: [id])
-  class   Class @relation(fields: [class_id], references: [id])
+  // Relations
+  category   Category    @relation(fields: [categoryId], references: [id])
+  store      Store       @relation(fields: [storeId], references: [id])
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  referrals  Referral[]
 }
 
-enum DayOfWeek {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  storeId     String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  store    Store     @relation(fields: [storeId], references: [id])
+  products Product[]
+
+  @@unique([name, storeId])
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user  User       @relation(fields: [userId], references: [id])
+  items CartItem[]
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart    Cart    @relation(fields: [cartId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  storeId         String
+  status          OrderStatus @default(pending)
+  total           Float
+  shippingAddress String
+  trackingNumber  String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id])
+  store       Store        @relation(fields: [storeId], references: [id])
+  items       OrderItem[]
+  commissions Commission[]
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Referral {
+  id         String   @id @default(cuid())
+  referrerId String
+  referredId String
+  productId  String
+  code       String   @unique
+  isUsed     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  referrer User    @relation("Referrer", fields: [referrerId], references: [id])
+  referred User    @relation("Referred", fields: [referredId], references: [id])
+  product  Product @relation(fields: [productId], references: [id])
+}
+
+model Commission {
+  id        String           @id @default(cuid())
+  userId    String
+  orderId   String
+  amount    Float
+  status    CommissionStatus @default(pending)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  user  User  @relation(fields: [userId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  store_id    String
+  title       String
+  description String
+  type        String // e.g., "order", "commission", "system"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  store Store @relation(fields: [store_id], references: [id])
 }

@@ -73,7 +73,7 @@ export class CloudinaryService {
                     const upload = cloudinary.uploader.upload_stream(
                         {
                             resource_type: 'auto',
-                            folder: 'smart-edu-hub/onboarding-docs'
+                            folder: 'acces-sellr/store-docs'
                         },
                         (error, result) => {
                             if (error) {

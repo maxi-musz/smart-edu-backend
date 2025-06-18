@@ -1,10 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { HelloModule } from './hello/hello.module';
-import { AdminModule } from './admin/admin.module';
-import { SchoolModule } from './school/school.module';
-import { SchedulesModule } from './school/director/schedules/schedules.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import * as joi from 'joi';
@@ -12,6 +8,8 @@ import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { AuthModule } from './auth/auth.module';
+import { SharedModule } from './shared/shared.module';
 
 @Module({
   imports: [
@@ -19,21 +17,13 @@ import { memoryStorage } from 'multer';
       isGlobal: true, // Makes the configuration available globally
       envFilePath: '.env', // Path to your environment variables file
       load: [appConfig, databaseConfig],
-      // validationSchema: joi.object({
-      //   NODE_ENV: joi.string().valid('development', 'staging', 'production').required(),
-      //   DATABASE_URL: joi.string().required(),
-      //   DATABASE_URL_STAGING: joi.string().required(),
-      //   DATABASE_URL_PRODUCTION: joi.string().required(),
-      // }),
     }),
     MulterModule.register({
       storage: memoryStorage(),
     }),
-    HelloModule, 
-    AdminModule, 
-    SchoolModule, 
-    SchedulesModule,
-    PrismaModule
+    PrismaModule,
+    AuthModule,
+    SharedModule,
   ],
   controllers: [AppController],
   providers: [AppService],

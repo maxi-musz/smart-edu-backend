@@ -1,9 +1,10 @@
 import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode, UseGuards, Request } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
-import { OnboardSchoolDto, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto, OnboardDataDto, RequestLoginOtpDTO, VerifyEmailOTPDto } from 'src/shared/dto/auth.dto';
+import { RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto, OnboardDataDto, RequestLoginOtpDTO, VerifyEmailOTPDto, loggedInUserProfileDto } from 'src/shared/dto/auth.dto';
 import { FileValidationInterceptor } from 'src/shared/interceptors/file-validation.interceptor';
 
+import { OnboardStoreDTO } from 'src/shared/dto/store.dto';
 import { JwtGuard } from './guard';
 
 interface ErrorResponse {
@@ -28,7 +29,7 @@ type ApiResponse = ErrorResponse | SuccessResponse;
 export class AuthController {
     constructor(private authService: AuthService) {}
 
-    @Post('onboard-school')
+    @Post('onboard-store')
     @UseInterceptors(
         FileFieldsInterceptor([
             { name: 'cac_or_approval_letter', maxCount: 1 },
@@ -37,8 +38,8 @@ export class AuthController {
         ]),
         FileValidationInterceptor
     )
-    async onboardSchool(
-        @Body() dto: OnboardSchoolDto,
+    async onboardStore(
+        @Body() dto: OnboardStoreDTO,
         @UploadedFiles() files: {
             cac_or_approval_letter?: Express.Multer.File[],
             utility_bill?: Express.Multer.File[],
@@ -51,15 +52,15 @@ export class AuthController {
             files.tax_cert?.[0]
         ].filter((file): file is Express.Multer.File => file !== undefined);
 
-        return this.authService.onboardSchool(dto, fileArray) as Promise<ApiResponse>;
+        return this.authService.onboardStore(dto, fileArray) as Promise<ApiResponse>;
     }
 
-    @Post('director-login-otp')
+    @Post('admin-login-otp')
     signUp(@Body() dto: RequestLoginOtpDTO) {
-        return this.authService.directorRequestLoginOtp(dto)
+        return this.authService.requestLoginOtp(dto)
     }
 
-    @Post("director-verify-login-otp")
+    @Post("admin-verify-login-otp")
     verifyEmailOTPAndSignIn(@Body() dto: VerifyEmailOTPDto) {
         return this.authService.verifyEmailOTPAndSignIn(dto)
     }
@@ -68,6 +69,13 @@ export class AuthController {
     @HttpCode(200)
     signIn(@Body() dto: SignInDto) {
         return this.authService.signIn(dto);
+    }
+
+    @UseGuards(JwtGuard)
+    @Get("fetch-user-details")
+    @HttpCode(200)
+    fetchLoggedInUserProfile(@Request() req) {
+        return this.authService.fetchLoggedInUserProfile(req.user);
     }
 
     @Post("request-password-reset-otp")
@@ -86,41 +94,6 @@ export class AuthController {
     @HttpCode(200)
     resetPassword(@Body() dto: ResetPasswordDTO) {
         return this.authService.resetPassword(dto)
-    }
-
-    @UseGuards(JwtGuard)
-    @Post("onboard-classes")
-    @HttpCode(201)
-    onboardClasses(@Body() dto: OnboardClassesDto, @Request() req: any) {
-        return this.authService.onboardClasses(dto, req.user);
-    }
-
-    @UseGuards(JwtGuard)
-    @Post("onboard-teachers")
-    @HttpCode(201)
-    onboardTeachers(@Body() dto: OnboardTeachersDto, @Request() req: any) {
-        return this.authService.onboardTeachers(dto, req.user);
-    }
-
-    @UseGuards(JwtGuard)
-    @Post("onboard-students")
-    @HttpCode(201)
-    onboardStudents(@Body() dto: OnboardStudentsDto, @Request() req: any) {
-        return this.authService.onboardStudents(dto, req.user);
-    }
-
-    @UseGuards(JwtGuard)
-    @Post("onboard-directors")
-    @HttpCode(201)
-    onboardDirectors(@Body() dto: OnboardDirectorsDto, @Request() req: any) {
-        return this.authService.onboardDirectors(dto, req.user);
-    }
-
-    @UseGuards(JwtGuard)
-    @Post("onboard-data")
-    @HttpCode(201)
-    onboardData(@Body() dto: OnboardDataDto, @Request() req: any) {
-        return this.authService.onboardData(dto, req.user);
     }
 }
  

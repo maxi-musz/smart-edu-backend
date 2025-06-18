@@ -41,6 +41,18 @@ interface SendResetOtpProps {
     otp: string;
 }
 
+interface StoreOnboardingMailData {
+    store_name: string;
+    store_email: string;
+    store_phone: string;
+    store_address: string;
+    documents: {
+        cac: string | null;
+        utility_bill: string | null;
+        tax_clearance: string | null;
+    };
+    defaultPassword?: string;
+}
 
 ////////////////////////////////////////////////////////////            Send mail to school owner
 export const sendOnboardingMailToSchoolOwner = async (
@@ -70,11 +82,11 @@ export const sendOnboardingMailToSchoolOwner = async (
 
         const mailOptions = {
             from: {
-              name: "Smart Edu Hub",
+              name: "Access-sellr",
               address: process.env.EMAIL_USER as string,
             },
             to: payload.school_email,
-            subject: `Welcome to Smart Edu Hub`,
+            subject: `Welcome to Access-sellr`,
             html: htmlContent,
           };
 
@@ -141,29 +153,6 @@ export const sendOnboardingMailToBTechAdmin = async (
             error.message
         )
     }
-    //   service: 'gmail',
-    //   host: process.env.GOOGLE_SMTP_HOST,
-    //   port: process.env.GOOGLE_SMTP_PORT ? parseInt(process.env.GOOGLE_SMTP_PORT) : 587,
-    //   secure: false,
-    //   auth: {
-    //     user: process.env.EMAIL_USER,
-    //     pass: process.env.EMAIL_PASSWORD,
-    //   },
-    // });
-
-    // const htmlContent = onboardingSchoolAdminNotificationTemplate(payload);
-
-    // const mailOptions = {
-    //   from: {
-    //     name: 'Smart Edu Hub',
-    //     address: process.env.EMAIL_USER as string,
-    //   },
-    //   to: process.env.BTECH_ADMIN_EMAIL as string || "bernardmayowaa@gmail.com",
-    //   subject: `🚀 New School Onboarding: ${payload.school_name}`,
-    //   html: htmlContent,
-    // };
-  
-    // await transporter.sendMail(mailOptions);
   };
   
   ////////////////////////////////////////////////////////////             Send password reset email
@@ -234,4 +223,126 @@ export const sendLoginOtpByMail = async ({ email, otp}: SendResetOtpProps): Prom
     console.error('Error sending otp email:', error);
     throw new Error('Failed to send OTP email');
   }
+}
+
+export async function sendOnboardingMailToStoreOwner(data: StoreOnboardingMailData) {
+    const { store_name, store_email, store_phone, store_address, documents } = data;
+
+    try {
+        // Check if env vars exist
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+            throw new Error("SMTP credentials missing in environment variables");
+        }
+
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            host: process.env.GOOGLE_SMTP_HOST,
+            port: process.env.GOOGLE_SMTP_PORT ? parseInt(process.env.GOOGLE_SMTP_PORT) : 587,
+            secure: false,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD,
+            },
+        });
+
+        const mailOptions = {
+            from: {
+                name: "Acces-Sellr",
+                address: process.env.EMAIL_USER as string,
+            },
+            to: store_email,
+            subject: 'Welcome to Acces-Sellr Platform',
+            html: `
+                <h1>Welcome to Acces-Sellr Platform!</h1>
+                <p>Dear ${store_name},</p>
+                <p>Thank you for registering your store with Acces-Sellr. Your store details have been received and are being reviewed.</p>
+                <p>Store Details:</p>
+                <ul>
+                    <li>Name: ${store_name}</li>
+                    <li>Email: ${store_email}</li>
+                    <li>Phone: ${store_phone}</li>
+                    <li>Address: ${store_address}</li>
+                </ul>
+                <p>Documents Submitted:</p>
+                <ul>
+                    <li>CAC Document: ${documents.cac ? 'Submitted' : 'Not Submitted'}</li>
+                    <li>Utility Bill: ${documents.utility_bill ? 'Submitted' : 'Not Submitted'}</li>
+                    <li>Tax Clearance: ${documents.tax_clearance ? 'Submitted' : 'Not Submitted'}</li>
+                </ul>
+                <p>We will review your application and get back to you shortly.</p>
+                <p>Best regards,<br>Acces-Sellr Team</p>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(colors.green(`Onboarding email sent to store owner: ${store_email}`));
+    } catch (error) {
+        console.log(colors.red("Error sending onboarding email to store owner: "), error);
+        throw ResponseHelper.error(
+            "Error sending onboarding email",
+            error.message
+        );
+    }
+}
+
+export async function sendOnboardingMailToPlatformAdmin(data: StoreOnboardingMailData) {
+    const { store_name, store_email, store_phone, store_address, documents, defaultPassword } = data;
+
+    try {
+        // Check if env vars exist
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+            throw new Error("SMTP credentials missing in environment variables");
+        }
+
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            host: process.env.GOOGLE_SMTP_HOST,
+            port: process.env.GOOGLE_SMTP_PORT ? parseInt(process.env.GOOGLE_SMTP_PORT) : 587,
+            secure: false,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD,
+            },
+        });
+
+        const adminEmail = process.env.ADMIN_EMAIL || "admin@acces-sellr.com";
+
+        const mailOptions = {
+            from: {
+                name: "Acces-Sellr",
+                address: process.env.EMAIL_USER as string,
+            },
+            to: adminEmail,
+            subject: 'New Store Registration - Acces-Sellr',
+            html: `
+                <h1>New Store Registration</h1>
+                <p>A new store has registered on the Acces-Sellr platform.</p>
+                <p>Store Details:</p>
+                <ul>
+                    <li>Name: ${store_name}</li>
+                    <li>Email: ${store_email}</li>
+                    <li>Phone: ${store_phone}</li>
+                    <li>Address: ${store_address}</li>
+                </ul>
+                <p>Documents Submitted:</p>
+                <ul>
+                    <li>CAC Document: ${documents.cac ? 'Submitted' : 'Not Submitted'}</li>
+                    <li>Utility Bill: ${documents.utility_bill ? 'Submitted' : 'Not Submitted'}</li>
+                    <li>Tax Clearance: ${documents.tax_clearance ? 'Submitted' : 'Not Submitted'}</li>
+                </ul>
+                <p>Store Manager Default Password: ${defaultPassword}</p>
+                <p>Please review the store's application and documents.</p>
+                <p>Best regards,<br>Acces-Sellr System</p>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(colors.green(`Onboarding email sent to platform admin: ${adminEmail}`));
+    } catch (error) {
+        console.log(colors.red("Error sending onboarding email to platform admin: "), error);
+        throw ResponseHelper.error(
+            "Error sending onboarding email",
+            error.message
+        );
+    }
 }
