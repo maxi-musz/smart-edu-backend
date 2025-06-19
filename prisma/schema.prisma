@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url = env("DATABASE_URL")
 }
 
 enum StoreStatus {
@@ -102,9 +102,11 @@ model User {
   last_name         String
   phone_number      String
   display_picture   String?
+  address           String?
   gender            Gender     @default(other)
   role              UserRole   @default(user)
   status            UserStatus @default(active)
+  is_active         Boolean    @default(true)
   otp               String?    @default("")
   otp_expires_at    DateTime?
   is_email_verified Boolean?   @default(false)
@@ -113,12 +115,12 @@ model User {
   updatedAt         DateTime   @updatedAt
 
   // Relations
-  store       Store?       @relation(fields: [store_id], references: [id])
-  orders      Order[]
-  cart        Cart?
-  referrals   Referral[]   @relation("Referrer")
-  referredBy  Referral[]   @relation("Referred")
-  commissions Commission[]
+  store          Store?       @relation(fields: [store_id], references: [id])
+  orders         Order[]
+  cart           Cart?
+  referrals_made Referral[]   @relation("Referrer")
+  referredBy     Referral[]   @relation("Referred")
+  commissions    Commission[]
 }
 
 model Product {
@@ -132,8 +134,19 @@ model Product {
   storeId     String
   commission  Float    @default(0)
   isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      String   @default("active") // active, inactive, suspended
+
+  // Book-specific fields
+  isbn          String? // International Standard Book Number
+  format        String? // Hardcover, Paperback, E-book, etc.
+  publisher     String? // Publisher name
+  author        String? // Author name
+  pages         Int? // Number of pages
+  language      String? // Language of the book
+  publishedDate DateTime? // Publication date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   category   Category    @relation(fields: [categoryId], references: [id])
@@ -191,6 +204,7 @@ model Order {
   storeId         String
   status          OrderStatus @default(pending)
   total           Float
+  total_amount    Float       @default(0) // Adding this field for compatibility
   shippingAddress String
   trackingNumber  String?
   createdAt       DateTime    @default(now())
@@ -223,6 +237,7 @@ model Referral {
   referredId String
   productId  String
   code       String   @unique
+  status     String   @default("pending") // pending, completed, cancelled
   isUsed     Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

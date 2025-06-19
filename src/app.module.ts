@@ -10,6 +10,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AuthModule } from './auth/auth.module';
 import { SharedModule } from './shared/shared.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { SharedModule } from './shared/shared.module';
     PrismaModule,
     AuthModule,
     SharedModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
