@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum StoreStatus {
@@ -24,6 +24,22 @@ enum UserRole {
   shipment_manager
   marketer
   user
+}
+
+enum UserLevel {
+  bronze
+  silver
+  gold
+  platinum
+  vip
+}
+
+enum Percentage {
+  PERCENT_100 @map("100")
+  PERCENT_75  @map("75")
+  PERCENT_50  @map("50")
+  PERCENT_25  @map("25")
+  PERCENT_0   @map("0")
 }
 
 enum UserStatus {
@@ -107,6 +123,7 @@ model User {
   role              UserRole   @default(user)
   status            UserStatus @default(active)
   is_active         Boolean    @default(true)
+  level             UserLevel  @default(bronze)
   otp               String?    @default("")
   otp_expires_at    DateTime?
   is_email_verified Boolean?   @default(false)

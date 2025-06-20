@@ -10,7 +10,7 @@ import { ApiResponse } from 'src/shared/helper-functions/response';
 export class CustomersService {
     constructor(private prisma: PrismaService) {}
 
-    async getCustomersDashboard(query: GetCustomersDto): Promise<ApiResponse<CustomersDashboardResponseDto>> {
+    async getCustomersDashboard(query: GetCustomersDto, userId: string): Promise<ApiResponse<CustomersDashboardResponseDto>> {
         console.log(colors.cyan('Fetching customers dashboard data...'));
 
         try {
@@ -80,6 +80,15 @@ export class CustomersService {
                 orderBy: { [sortBy]: sortOrder }
             });
 
+            // Map user level to allowed percentage (number)
+            const levelToPercentage: Record<string, number> = {
+                bronze: 25,
+                silver: 50,
+                gold: 75,
+                platinum: 100,
+                vip: 100
+            };
+
             // Transform customers to include calculated fields
             const transformedCustomers = customers.map(customer => {
                 // Calculate customer statistics
@@ -91,17 +100,6 @@ export class CustomersService {
                     .filter((order: any) => ['pending', 'confirmed'].includes(order.status))
                     .reduce((sum: number, order: any) => sum + order.total, 0);
 
-                // Calculate payment percentage
-                const paymentPercentage = totalValue > 0 ? Math.round(((totalValue - totalOwed) / totalValue) * 100) : 0;
-
-                // Determine customer level based on total value
-                let level = 'New';
-                if (totalValue >= 1000000) level = 'Diamond';
-                else if (totalValue >= 500000) level = 'Platinum';
-                else if (totalValue >= 200000) level = 'Gold';
-                else if (totalValue >= 100000) level = 'Silver';
-                else if (totalValue >= 50000) level = 'Bronze';
-
                 // Get last order date
                 const lastOrder = customer.orders[0];
                 const lastOrderDate = lastOrder ? lastOrder.createdAt.toISOString().split('T')[0] : undefined;
@@ -112,6 +110,10 @@ export class CustomersService {
                     'suspended': 'Suspended',
                     'inactive': 'Inactive'
                 };
+
+                // Use the user's level from the DB
+                const level = customer.level || 'bronze';
+                const paymentPercentage = levelToPercentage[level] ?? 0;
 
                 return {
                     id: customer.id,
@@ -142,12 +144,14 @@ export class CustomersService {
 
             // Get stats
             const [
+                totalAdmins,
                 totalCustomers,
                 activeCustomers,
                 totalOrders,
                 totalValue,
                 totalOwed
             ] = await Promise.all([
+                this.prisma.user.count({where: { role: "admin" }}),
                 this.prisma.user.count({ where: { role: 'user' } }),
                 this.prisma.user.count({ where: { role: 'user', status: 'active' } }),
                 this.prisma.order.count(),
@@ -161,6 +165,7 @@ export class CustomersService {
             ]);
 
             const stats = {
+                totalAdmins,
                 totalCustomers,
                 activeCustomers,
                 totalOrders,
@@ -168,11 +173,18 @@ export class CustomersService {
                 totalOwed: Math.round(totalOwed._sum.total || 0)
             };
 
+            // Fetch the authenticated user's level
+            const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: { level: true }
+            });
+            const allowedPercentage = user && user.level ? levelToPercentage[user.level] : null;
+
             console.log(colors.green(`Customers dashboard data retrieved successfully. Found ${filteredCustomers.length} customers`));
 
             const formatted_response = {
+                stats,
                 customers: filteredCustomers,
-                stats
             };
 
             return new ApiResponse(

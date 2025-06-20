@@ -6,6 +6,8 @@ import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
 import { CustomersModule } from './customers/customers.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Reflector } from '@nestjs/core';
 
 @Module({
     imports: [
@@ -16,7 +18,7 @@ import { ReferralsModule } from './referrals/referrals.module';
         ReferralsModule
     ],
     controllers: [AdminController],
-    providers: [AdminService],
+    providers: [AdminService, RolesGuard, Reflector],
     exports: [
         DashboardModule,
         ProductsModule,

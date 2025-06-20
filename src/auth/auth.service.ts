@@ -105,7 +105,7 @@ export class AuthService {
             return ResponseHelper.success(
                 "Login successful",
                 {
-                    ...await this.signToken(user.id, user.email),
+                    ...await this.signToken(user.id, user.email, user.role),
                     role: user.role
                 }
             );
@@ -122,11 +122,13 @@ export class AuthService {
 
     async signToken(
         userId: string,
-        email: string
+        email: string,
+        role: string
     ): Promise<{access_token: string}> {
         const payload = {
             sub: userId,
-            email
+            email,
+            role
         };
 
         const secret = this.config.get('JWT_SECRET');
@@ -212,7 +214,7 @@ export class AuthService {
             return ResponseHelper.success(
                 "User signed in successfully",
                 {
-                    ...await this.signToken(existing_user.id, existing_user.email),
+                    ...await this.signToken(existing_user.id, existing_user.email, existing_user.role),
                     role: existing_user.role
                 }
             );

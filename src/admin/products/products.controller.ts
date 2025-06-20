@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Put, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Put, UseGuards, Request } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { JwtGuard } from '../../auth/guard';
 import { GetProductsDto } from './dto/get-products.dto';

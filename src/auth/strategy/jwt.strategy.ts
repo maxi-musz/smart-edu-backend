@@ -9,6 +9,7 @@ interface JwtPayload {
     email: string;
     iat: number;
     exp: number;
+    role: string;
 }
 
 @Injectable()
@@ -54,7 +55,8 @@ export class JwtStrategy extends PassportStrategy(
         // Return a user object that will be available in the request
         return {
             id: payload.sub,
-            email: payload.email
+            email: payload.email,
+            role: payload.role
         };
     }
 }
