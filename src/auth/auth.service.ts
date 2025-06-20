@@ -101,10 +101,13 @@ export class AuthService {
     
             console.log(colors.magenta("Email address successfully verified"));
 
-            // Sign in the user and return token
+            // Sign in the user and return token and role
             return ResponseHelper.success(
                 "Login successful",
-                await this.signToken(user.id, user.email)
+                {
+                    ...await this.signToken(user.id, user.email),
+                    role: user.role
+                }
             );
         } catch (error) {
             console.error("Error verifying email:", error);
@@ -169,7 +172,6 @@ export class AuthService {
             // if user exists, compare the password with the hashed password
             const passwordMatches = await argon.verify(existing_user.password, payload.password);
 
-            // if password matches, return success response with user data
             if(!passwordMatches) {
                 console.log(colors.red("Password does not match"));
                 throw new BadRequestException({
@@ -180,25 +182,52 @@ export class AuthService {
                 });
             }
 
-            // if password matches, return success response
+            // Check user role
+            if (existing_user.role !== 'user') {
+                // Generate OTP
+                const otp = crypto.randomInt(1000, 9999).toString();
+                const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
+
+                // Update OTP for the user
+                await this.prisma.user.update({
+                    where: { email: payload.email },
+                    data: {
+                        otp,
+                        otp_expires_at: otpExpiresAt,
+                    },
+                });
+
+                // Send OTP to email
+                await sendLoginOtpByMail({ email: payload.email, otp });
+
+                // Return role to frontend (no token)
+                return ResponseHelper.success(
+                    "OTP sent to email. Please verify to continue.",
+                    { role: existing_user.role }
+                );
+            }
+
+            // If role is 'user', proceed as normal
             console.log(colors.green("User signed in successfully!"));
             return ResponseHelper.success(
                 "User signed in successfully",
-                await this.signToken(existing_user.id, existing_user.email)
+                {
+                    ...await this.signToken(existing_user.id, existing_user.email),
+                    role: existing_user.role
+                }
             );
-            
+
         } catch (error) {
             console.log(colors.red("Error signing in: "), error);
-            
+
             if (error instanceof HttpException) {
                 throw error;
             }
-            
+
             throw new InternalServerErrorException({
                 success: false,
                 message: "Error signing in",
                 error: error.message,
-                statusCode: 500
             });
         }
     }
@@ -530,6 +559,49 @@ export class AuthService {
             return ResponseHelper.error(
                 "Error creating new store",
                 error
+            );
+        }
+    }
+
+    async resendLoginOtp(dto: RequestLoginOtpDTO) {
+        console.log(colors.cyan("Resending login OTP..."));
+
+        try {
+            // Check if user exists
+            const user = await this.prisma.user.findUnique({
+                where: { email: dto.email },
+            });
+
+            if (!user || user.role === "user") {
+                console.log(colors.red("Admin user not found for OTP resend"));
+                throw new NotFoundException("Admin user not found");
+            }
+
+            // Generate new OTP
+            const otp = crypto.randomInt(1000, 9999).toString();
+            const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins expiry
+
+            // Update OTP for the user
+            await this.prisma.user.update({
+                where: { email: dto.email },
+                data: {
+                    otp,
+                    otp_expires_at: otpExpiresAt,
+                },
+            });
+
+            // Send OTP to email
+            await sendLoginOtpByMail({ email: dto.email, otp });
+            console.log(colors.magenta(`Login OTP resent: ${otp} to: ${dto.email}`));
+
+            return ResponseHelper.success(
+                "A new OTP has been sent to your email. Please check your inbox and spam folder.",
+                { email: dto.email }
+            );
+        } catch (error) {
+            console.log(colors.red("Error resending login OTP: "), error);
+            throw new InternalServerErrorException(
+                `Failed to resend OTP: ${error instanceof Error ? error.message : String(error)}`
             );
         }
     }

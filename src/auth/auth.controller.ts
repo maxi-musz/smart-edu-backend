@@ -95,5 +95,10 @@ export class AuthController {
     resetPassword(@Body() dto: ResetPasswordDTO) {
         return this.authService.resetPassword(dto)
     }
+
+    @Post('resend-login-otp')
+    resendLoginOtp(@Body() dto: RequestLoginOtpDTO) {
+        return this.authService.resendLoginOtp(dto);
+    }
 }
  

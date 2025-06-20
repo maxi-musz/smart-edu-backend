@@ -11,6 +11,7 @@ import { memoryStorage } from 'multer';
 import { AuthModule } from './auth/auth.module';
 import { SharedModule } from './shared/shared.module';
 import { AdminModule } from './admin/admin.module';
+import { PaystackModule } from './paystack/paystack.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AdminModule } from './admin/admin.module';
     AuthModule,
     SharedModule,
     AdminModule,
+    PaystackModule,
   ],
   controllers: [AppController],
   providers: [AppService],
