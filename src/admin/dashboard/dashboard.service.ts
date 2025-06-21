@@ -331,7 +331,6 @@ export class DashboardService {
     private async getTopProducts() {
         const products = await this.prisma.product.findMany({
             include: {
-                category: true,
                 orderItems: {
                     include: {
                         order: true
@@ -361,8 +360,8 @@ export class DashboardService {
             return {
                 id: product.id,
                 name: product.name,
-                category: product.category.name,
-                image: product.images.length > 0 ? product.images[0] : "/images/books/default.jpg",
+                category: product.category || null,
+                image: product.displayImages.length > 0 ? product.displayImages[0] : "/images/books/default.jpg",
                 sales,
                 revenue: Math.round(revenue),
                 stock: product.stock,

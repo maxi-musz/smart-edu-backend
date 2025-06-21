@@ -70,6 +70,83 @@ enum Gender {
   other
 }
 
+enum BookCategory {
+  education
+  fiction
+  non_fiction
+  science
+  technology
+  business
+  self_help
+  biography
+  history
+  philosophy
+  religion
+  politics
+  economics
+  psychology
+  health
+  cooking
+  travel
+  sports
+  arts
+  literature
+  poetry
+  drama
+  mystery
+  thriller
+  romance
+  fantasy
+  science_fiction
+  horror
+  western
+  adventure
+  humor
+  comics
+  graphic_novels
+  children
+  young_adult
+  academic
+  textbook
+  reference
+  dictionary
+  encyclopedia
+  magazine
+  newspaper
+  other
+}
+
+enum BookGenre {
+  education
+  fiction
+  non_fiction
+  mystery
+  romance
+  fantasy
+  science_fiction
+  horror
+  biography
+  self_help
+  other
+}
+
+enum BookLanguage {
+  english
+  spanish
+  french
+  german
+  chinese
+  japanese
+}
+
+enum BookFormat {
+  audiobook
+  e_book
+  hardcover
+  paperback
+  hardcopy
+}
+
 model Store {
   id          String      @id @default(cuid())
   name        String
@@ -141,36 +218,43 @@ model User {
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  price       Float
-  stock       Int
-  images      String[]
-  categoryId  String
-  storeId     String
-  commission  Float    @default(0)
-  isActive    Boolean  @default(true)
-  status      String   @default("active") // active, inactive, suspended
+  id            String     @id @default(cuid())
+  name          String
+  description   String?
+  sellingPrice  Float
+  normalPrice   Float
+  stock         Int
+  displayImages String[]
+  // categoryId    String?
+  storeId       String?
+  commission    String?
+  BookFormat    BookFormat @default(hardcover)
+  isActive      Boolean    @default(true)
+  status        String     @default("active") // active, inactive, suspended
+  rated         String?
 
   // Book-specific fields
-  isbn          String? // International Standard Book Number
+  isbn          String?       @unique
   format        String? // Hardcover, Paperback, E-book, etc.
   publisher     String? // Publisher name
   author        String? // Author name
   pages         Int? // Number of pages
   language      String? // Language of the book
   publishedDate DateTime? // Publication date
+  category      BookCategory? // Using the enum directly
+  genre         BookGenre? // Added genre field
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  category   Category    @relation(fields: [categoryId], references: [id])
-  store      Store       @relation(fields: [storeId], references: [id])
+  // category   Category?   @relation(fields: [categoryId], references: [id])
+  store      Store?      @relation(fields: [storeId], references: [id])
   cartItems  CartItem[]
   orderItems OrderItem[]
   referrals  Referral[]
+  Category   Category?   @relation(fields: [categoryId], references: [id])
+  categoryId String?
 }
 
 model Category {

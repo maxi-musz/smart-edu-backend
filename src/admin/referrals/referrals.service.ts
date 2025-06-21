@@ -225,7 +225,7 @@ export class ReferralsService {
                         select: {
                             id: true,
                             name: true,
-                            price: true,
+                            sellingPrice: true,
                             commission: true
                         }
                     }
@@ -346,13 +346,13 @@ export class ReferralsService {
                 conversionDate: referral.isUsed ? referral.updatedAt.toISOString().split('T')[0] : null,
                 source: this.determineSource(referral.code),
                 region: this.determineRegion(referral.referred.phone_number),
-                orderAmount: referral.product.price || 50000,
+                orderAmount: referral.product.sellingPrice || 50000,
                 commissionRate: referral.product.commission || 10
             }));
 
             const transformedTopReferrers = topReferrers.map((referrer, index) => {
                 const totalRevenue = referrer.referrals_made.reduce((sum, ref) => {
-                    return sum + (ref.product?.price || 0);
+                    return sum + (ref.product?.sellingPrice || 0);
                 }, 0);
                 
                 const totalCommission = referrer.commissions.reduce((sum, comm) => {
@@ -399,7 +399,7 @@ export class ReferralsService {
                 referredUser: `${event.referred.first_name} ${event.referred.last_name}`,
                 action: event.isUsed ? 'Purchase' : 'Signup',
                 commission: event.isUsed ? (event.product?.commission || 0) : 0,
-                orderAmount: event.isUsed ? (event.product?.price || 0) : 0
+                orderAmount: event.isUsed ? (event.product?.sellingPrice || 0) : 0
             }));
 
             const result = {

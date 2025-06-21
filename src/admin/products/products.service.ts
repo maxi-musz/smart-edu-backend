@@ -2,6 +2,9 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as colors from 'colors';
 import { ApiResponse } from 'src/shared/helper-functions/response';
+import { CreateBookDto } from './dto/create-book.dto';
+import * as csv from 'csv-parse/sync';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class ProductsService {
@@ -19,12 +22,12 @@ export class ProductsService {
                 this.prisma.category.count(),
                 this.prisma.product.count({ where: { stock: { gt: 0 } } }),
                 this.prisma.product.findMany({
-                    select: { price: true, stock: true }
+                    select: { sellingPrice: true, stock: true }
                 })
             ]);
 
             const totalProductValue = productsWithValue.reduce((total, product) => {
-                return total + (product.price * product.stock);
+                return total + (product.sellingPrice * product.stock);
             }, 0);
 
             // Get products table data with pagination
@@ -38,14 +41,12 @@ export class ProductsService {
                         publisher: true,      // published by
                         format: true,         // book format
                         isbn: true,           // isbn
-                        price: true,          // price
+                        sellingPrice: true,   // selling price
+                        normalPrice: true,    // normal price
                         stock: true,          // stock
                         status: true,         // status
-                        category: {
-                            select: {
-                                name: true    // category
-                            }
-                        }
+                        categoryId: true,
+                        // Add more fields as needed
                     },
                     orderBy: { createdAt: 'desc' }
                 }),
@@ -67,9 +68,10 @@ export class ProductsService {
                         bookName: product.name,
                         publishedBy: product.publisher || 'N/A',
                         bookFormat: product.format || 'N/A',
-                        category: product.category?.name || 'N/A',
+                        categoryId: product.categoryId || 'N/A',
                         isbn: product.isbn || 'N/A',
-                        price: product.price,
+                        sellingPrice: product.sellingPrice,
+                        normalPrice: product.normalPrice,
                         stock: product.stock,
                         status: product.status
                     })),
@@ -128,9 +130,7 @@ export class ProductsService {
 
             // Filter by category
             if (category) {
-                whereClause.category = {
-                    name: { contains: category, mode: 'insensitive' as const }
-                };
+                whereClause.category = category;
             }
 
             // Filter by status
@@ -191,12 +191,6 @@ export class ProductsService {
                                 name: true,
                                 email: true
                             }
-                        },
-                        category: {
-                            select: {
-                                id: true,
-                                name: true
-                            }
                         }
                     },
                     orderBy
@@ -238,12 +232,6 @@ export class ProductsService {
                             name: true,
                             email: true,
                             phone: true
-                        }
-                    },
-                    category: {
-                        select: {
-                            id: true,
-                            name: true
                         }
                     }
                 }
@@ -309,10 +297,11 @@ export class ProductsService {
                     take: limit,
                     where: { storeId: storeId },
                     include: {
-                        category: {
+                        store: {
                             select: {
                                 id: true,
-                                name: true
+                                name: true,
+                                email: true
                             }
                         }
                     },
@@ -365,9 +354,10 @@ export class ProductsService {
                     distinct: ['author']
                 }),
                 // Available categories
-                this.prisma.category.findMany({
-                    select: { id: true, name: true },
-                    where: { isActive: true }
+                this.prisma.product.findMany({
+                    where: { category: { not: null } },
+                    select: { category: true },
+                    distinct: ['category']
                 })
             ]);
 
@@ -375,7 +365,7 @@ export class ProductsService {
                 formats: formats.map(item => item.format).filter(Boolean),
                 publishers: publishers.map(item => item.publisher).filter(Boolean),
                 authors: authors.map(item => item.author).filter(Boolean),
-                categories: categories.map(cat => ({ id: cat.id, name: cat.name })),
+                categories: categories.map(cat => ({ id: cat.category, name: cat.category })),
                 statuses: ['active', 'inactive', 'suspended'],
                 sortOptions: [
                     { value: 'name', label: 'Book Name' },
@@ -413,7 +403,7 @@ export class ProductsService {
 
             // Get products by category
             const productsByCategory = await this.prisma.product.groupBy({
-                by: ['categoryId'],
+                by: ['category'],
                 _count: {
                     id: true
                 }
@@ -424,11 +414,6 @@ export class ProductsService {
                 take: 10,
                 include: {
                     store: {
-                        select: {
-                            name: true
-                        }
-                    },
-                    category: {
                         select: {
                             name: true
                         }
@@ -463,6 +448,136 @@ export class ProductsService {
         } catch (error) {
             console.log(colors.red('Error fetching product analytics:'), error);
             throw error;
+        }
+    }
+
+    async addBooksManually(books: CreateBookDto[]) {
+        // console.log(colors.blue("Admin manually adding new books"))
+        console.log(colors.cyan(`Admin attempting to add ${books.length} books`))
+       
+        const isbns = books.map(book => book.isbn).filter(isbn => isbn); 
+        if (isbns.length > 0) {
+            const existingBooks = await this.prisma.product.findMany({
+                where: { isbn: { in: isbns } },
+                select: { isbn: true }
+            });
+            if (existingBooks.length > 0) {
+                const duplicates = existingBooks.map(b => b.isbn);
+                console.log(colors.red(`Duplicate ISBN(s) found: ${duplicates.join(', ')}`))
+                throw new BadRequestException(`Duplicate ISBN(s) found: ${duplicates.join(', ')}`);
+            }
+        }
+
+        try {
+            // For now, let's create books one by one to get better error messages
+            const createdBooks: any[] = [];
+            
+            for (const book of books) {
+                console.log(colors.yellow(`Processing book: ${book.name}`));
+                
+                const bookData = {
+                    name: book.name,
+                    description: book.description,
+                    stock: book.qty,
+                    sellingPrice: book.sellingPrice,
+                    normalPrice: book.normalPrice,
+                    commission: book.commission,
+                    // Use the correct field names from Prisma schema
+                    BookFormat: book.format as any,
+                    format: book.format,
+                    language: book.language,
+                    category: book.category as any, // Direct enum field
+                    genre: book.genre as any, // Direct enum field
+                    rated: book.rated,
+                    isbn: book.isbn,
+                    publisher: book.publisher,
+                    storeId: null, // TODO: Set default storeId
+                    displayImages: book.coverImage ? [book.coverImage] : [],
+                    isActive: true,
+                    status: 'active'
+                };
+                
+                console.log(colors.green(`Book data prepared for: ${book.name}`));
+                
+                const createdBook = await this.prisma.product.create({
+                    data: bookData
+                });
+                
+                createdBooks.push(createdBook);
+                console.log(colors.green(`Book created successfully: ${createdBook.id}`));
+            }
+
+            console.log(colors.magenta(`Successfully added ${createdBooks.length} books`));
+            return new ApiResponse(true, `Successfully added ${createdBooks.length} books`, {
+                count: createdBooks.length,
+                books: createdBooks
+            });
+
+        } catch (error) {
+            console.log(colors.red('Error adding books:'), error);
+            throw new BadRequestException('Failed to add books: ' + error.message);
+        }
+    }
+
+    async addBooksFromFile(file: Express.Multer.File) {
+        if (!file) throw new BadRequestException('No file uploaded');
+        let books: CreateBookDto[] = [];
+        try {
+            if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+                const records = csv.parse(file.buffer.toString(), {
+                    columns: true,
+                    skip_empty_lines: true,
+                });
+                books = records.map((row: any) => ({
+                    name: row.name,
+                    description: row.description,
+                    qty: Number(row.qty),
+                    sellingPrice: Number(row.sellingPrice),
+                    normalPrice: Number(row.normalPrice),
+                    category: row.category,
+                    language: row.language,
+                    format: row.format,
+                    genre: row.genre,
+                    rated: row.rated,
+                    coverImage: row.coverImage,
+                    isbn: row.isbn,
+                    publisher: row.publisher,
+                    commission: String(row.commission ?? '0'),
+                }));
+            } else if (
+                file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                file.mimetype === 'application/vnd.ms-excel' ||
+                file.originalname.endsWith('.xlsx') ||
+                file.originalname.endsWith('.xls')
+            ) {
+                const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const records = XLSX.utils.sheet_to_json(sheet);
+                books = records.map((row: any) => ({
+                    name: row.name,
+                    description: row.description,
+                    qty: Number(row.qty),
+                    sellingPrice: Number(row.sellingPrice),
+                    normalPrice: Number(row.normalPrice),
+                    category: row.category,
+                    language: row.language,
+                    format: row.format,
+                    genre: row.genre,
+                    rated: row.rated,
+                    coverImage: row.coverImage,
+                    isbn: row.isbn,
+                    publisher: row.publisher,
+                    commission: String(row.commission ?? '0'),
+                }));
+            } else {
+                throw new BadRequestException('Unsupported file type');
+            }
+
+            console.log(colors.magenta("New books successfully added"))
+            return this.addBooksManually(books);
+        } catch (error) {
+            throw new BadRequestException('Failed to parse file: ' + error.message);
         }
     }
 } 
