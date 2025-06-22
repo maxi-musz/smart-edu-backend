@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum StoreStatus {
@@ -258,13 +258,15 @@ model Product {
 }
 
 model Category {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  storeId     String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  storeId        String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdByName  String?
+  createdByEmail String?
 
   // Relations
   store    Store     @relation(fields: [storeId], references: [id])

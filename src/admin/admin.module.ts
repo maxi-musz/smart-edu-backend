@@ -8,6 +8,7 @@ import { CustomersModule } from './customers/customers.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Reflector } from '@nestjs/core';
+import { CategoryModule } from './category/category.module';
 
 @Module({
     imports: [
@@ -15,7 +16,8 @@ import { Reflector } from '@nestjs/core';
         ProductsModule,
         OrdersModule,
         CustomersModule,
-        ReferralsModule
+        ReferralsModule,
+        CategoryModule
     ],
     controllers: [AdminController],
     providers: [AdminService, RolesGuard, Reflector],
