@@ -377,3 +377,47 @@ model Notification {
   // Relations
   store Store @relation(fields: [store_id], references: [id])
 }
+
+model Genre {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdByName  String?
+  createdByEmail String?
+}
+
+model Language {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdByName  String?
+  createdByEmail String?
+}
+
+model Format {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdByName  String?
+  createdByEmail String?
+}
+
+model AgeRating {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdByName  String?
+  createdByEmail String?
+}
