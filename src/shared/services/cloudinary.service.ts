@@ -44,7 +44,7 @@ export class CloudinaryService {
         return errors;
     }
 
-    async uploadToCloudinary(files: Array<Express.Multer.File>): Promise<CloudinaryUploadResult[]> {
+    async uploadToCloudinary(files: Array<Express.Multer.File>, folder: string = 'acces-sellr/store-docs'): Promise<CloudinaryUploadResult[]> {
         console.log(colors.yellow("Validating files before upload..."));
         
         // Validate all files first
@@ -73,7 +73,7 @@ export class CloudinaryService {
                     const upload = cloudinary.uploader.upload_stream(
                         {
                             resource_type: 'auto',
-                            folder: 'acces-sellr/store-docs'
+                            folder: folder
                         },
                         (error, result) => {
                             if (error) {

@@ -79,6 +79,12 @@ export enum BookFormat {
 }
 
 export class CreateBookDto {
+  // Static validation arrays for use in controllers
+  static readonly VALID_CATEGORIES = Object.values(BookCategory);
+  static readonly VALID_GENRES = Object.values(BookGenre);
+  static readonly VALID_FORMATS = Object.values(BookFormat);
+  static readonly VALID_LANGUAGES = Object.values(BookLanguage);
+
   @IsString()
   @IsNotEmpty()
   name: string;

@@ -361,7 +361,9 @@ export class DashboardService {
                 id: product.id,
                 name: product.name,
                 category: product.category || null,
-                image: product.displayImages.length > 0 ? product.displayImages[0] : "/images/books/default.jpg",
+                image: product.displayImages && Array.isArray(product.displayImages) && product.displayImages.length > 0 
+                    ? (product.displayImages[0] as any).secure_url 
+                    : "/images/books/default.jpg",
                 sales,
                 revenue: Math.round(revenue),
                 stock: product.stock,

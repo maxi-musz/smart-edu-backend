@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url = env("DATABASE_URL")
 }
 
 enum StoreStatus {
@@ -224,7 +224,7 @@ model Product {
   sellingPrice  Float
   normalPrice   Float
   stock         Int
-  displayImages String[]
+  displayImages Json? // [{ secure_url: string, public_id: string }]
   // categoryId    String?
   storeId       String?
   commission    String?
