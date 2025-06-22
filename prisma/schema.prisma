@@ -218,59 +218,50 @@ model User {
 }
 
 model Product {
-  id            String     @id @default(cuid())
+  id            String      @id @default(cuid())
   name          String
   description   String?
   sellingPrice  Float
   normalPrice   Float
   stock         Int
   displayImages Json? // [{ secure_url: string, public_id: string }]
-  // categoryId    String?
   storeId       String?
   commission    String?
-  BookFormat    BookFormat @default(hardcover)
-  isActive      Boolean    @default(true)
-  status        String     @default("active") // active, inactive, suspended
+  BookFormat    BookFormat  @default(hardcover)
+  isActive      Boolean     @default(true)
+  status        String      @default("active") // active, inactive, suspended
   rated         String?
-
-  // Book-specific fields
-  isbn          String?       @unique
+  isbn          String?     @unique
   format        String? // Hardcover, Paperback, E-book, etc.
   publisher     String? // Publisher name
   author        String? // Author name
   pages         Int? // Number of pages
   language      String? // Language of the book
   publishedDate DateTime? // Publication date
-  category      BookCategory? // Using the enum directly
   genre         BookGenre? // Added genre field
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   // Relations
-  // category   Category?   @relation(fields: [categoryId], references: [id])
-  store      Store?      @relation(fields: [storeId], references: [id])
-  cartItems  CartItem[]
-  orderItems OrderItem[]
-  referrals  Referral[]
-  Category   Category?   @relation(fields: [categoryId], references: [id])
-  categoryId String?
+  store         Store?      @relation(fields: [storeId], references: [id])
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  referrals     Referral[]
+  categories    Category[]  @relation("ProductCategories")
 }
 
 model Category {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String
   description    String?
   storeId        String
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   createdByName  String?
   createdByEmail String?
-
   // Relations
-  store    Store     @relation(fields: [storeId], references: [id])
-  products Product[]
+  store          Store     @relation(fields: [storeId], references: [id])
+  products       Product[] @relation("ProductCategories")
 
   @@unique([name, storeId])
 }

@@ -335,6 +335,12 @@ export class DashboardService {
                     include: {
                         order: true
                     }
+                },
+                categories: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
                 }
             },
             orderBy: {
@@ -360,14 +366,14 @@ export class DashboardService {
             return {
                 id: product.id,
                 name: product.name,
-                category: product.category || null,
                 image: product.displayImages && Array.isArray(product.displayImages) && product.displayImages.length > 0 
                     ? (product.displayImages[0] as any).secure_url 
                     : "/images/books/default.jpg",
                 sales,
                 revenue: Math.round(revenue),
                 stock: product.stock,
-                rating: Math.round(rating * 10) / 10
+                rating: Math.round(rating * 10) / 10,
+                categories: product.categories ? product.categories.map(c => ({ id: c.id, name: c.name })) : []
             };
         });
     }

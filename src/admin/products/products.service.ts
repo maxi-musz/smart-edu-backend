@@ -40,19 +40,13 @@ export class ProductsService {
                 this.prisma.product.findMany({
                     skip,
                     take: limit,
-                    select: {
-                        id: true,
-                        name: true,           // book name
-                        publisher: true,      // published by
-                        format: true,         // book format
-                        isbn: true,           // isbn
-                        sellingPrice: true,   // selling price
-                        normalPrice: true,    // normal price
-                        stock: true,          // stock
-                        status: true,         // status
-                        categoryId: true,
-                        displayImages: true,  // displayImages
-                        // Add more fields as needed
+                    include: {
+                        categories: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
                     },
                     orderBy: { createdAt: 'desc' }
                 }),
@@ -74,13 +68,14 @@ export class ProductsService {
                         bookName: product.name,
                         publishedBy: product.publisher || 'N/A',
                         bookFormat: product.format || 'N/A',
-                        categoryId: product.categoryId || 'N/A',
+                        categories: product.categories.map(c => ({ id: c.id, name: c.name })),
                         isbn: product.isbn || 'N/A',
                         sellingPrice: product.sellingPrice,
                         normalPrice: product.normalPrice,
+                        referralCommission: product.commission ?? null,
                         stock: product.stock,
                         status: product.status,
-                        displayImages: product.displayImages || []
+                        displayImages: product.displayImages || [],
                     })),
                     pagination: {
                         currentPage: page,
@@ -137,7 +132,7 @@ export class ProductsService {
 
             // Filter by category
             if (category) {
-                whereClause.category = category;
+                whereClause.categories = { some: { id: category } };
             }
 
             // Filter by status
@@ -196,7 +191,13 @@ export class ProductsService {
                             select: {
                                 id: true,
                                 name: true,
-                                email: true
+                                email: true,
+                            }
+                        },
+                        categories: {
+                            select: {
+                                id: true,
+                                name: true
                             }
                         }
                     },
@@ -207,8 +208,15 @@ export class ProductsService {
 
             const totalPages = Math.ceil(total / limit);
 
+            // Map categories to null if empty
+            const formattedProducts = products.map(product => ({
+                ...product,
+                commission: product.commission ?? null,
+                categories: product.categories && product.categories.length > 0 ? product.categories : null
+            }));
+
             const formattedResponse = {
-                products,
+                products: formattedProducts,
                 pagination: {
                     currentPage: page,
                     totalPages,
@@ -240,6 +248,12 @@ export class ProductsService {
                             email: true,
                             phone: true
                         }
+                    },
+                    categories: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
                     }
                 }
             });
@@ -262,7 +276,15 @@ export class ProductsService {
 
         try {
             const product = await this.prisma.product.findUnique({
-                where: { id }
+                where: { id },
+                include: {
+                    categories: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
+                }
             });
 
             if (!product) {
@@ -271,13 +293,24 @@ export class ProductsService {
 
             const updatedProduct = await this.prisma.product.update({
                 where: { id },
-                data: { status },
+                data: {
+                    status,
+                    categories: {
+                        connect: product.categories.map(c => ({ id: c.id }))
+                    }
+                },
                 include: {
                     store: {
                         select: {
                             id: true,
                             name: true,
                             email: true
+                        }
+                    },
+                    categories: {
+                        select: {
+                            id: true,
+                            name: true
                         }
                     }
                 }
@@ -309,6 +342,12 @@ export class ProductsService {
                                 id: true,
                                 name: true,
                                 email: true
+                            }
+                        },
+                        categories: {
+                            select: {
+                                id: true,
+                                name: true
                             }
                         }
                     },
@@ -361,10 +400,8 @@ export class ProductsService {
                     distinct: ['author']
                 }),
                 // Available categories
-                this.prisma.product.findMany({
-                    where: { category: { not: null } },
-                    select: { category: true },
-                    distinct: ['category']
+                this.prisma.category.findMany({
+                    select: { id: true, name: true }
                 })
             ]);
 
@@ -372,7 +409,7 @@ export class ProductsService {
                 formats: formats.map(item => item.format).filter(Boolean),
                 publishers: publishers.map(item => item.publisher).filter(Boolean),
                 authors: authors.map(item => item.author).filter(Boolean),
-                categories: categories.map(cat => ({ id: cat.category, name: cat.category })),
+                categories: categories.map(cat => ({ id: cat.id, name: cat.name })),
                 statuses: ['active', 'inactive', 'suspended'],
                 sortOptions: [
                     { value: 'name', label: 'Book Name' },
@@ -501,7 +538,7 @@ export class ProductsService {
             qty: parseInt(qty),
             sellingPrice: parseFloat(sellingPrice),
             normalPrice: parseFloat(normalPrice),
-            category: normalizedCategory as BookCategory,
+            categoryIds: category ? [category] : [],
             language: normalizedLanguage as BookLanguage,
             format: finalFormat as BookFormat,
             genre: normalizedGenre as BookGenre,
@@ -564,7 +601,7 @@ export class ProductsService {
     }
 
     async addBook(book: CreateBookDto, coverImages: Express.Multer.File[]) {
-        console.log(colors.cyan(`Admin attempting to add book: ${book.name}`))
+        console.log(colors.cyan(`Admin attempting to add book: ${JSON.stringify(book)}`))
        
         // Check for duplicate ISBN
         if (book.isbn) {
@@ -597,17 +634,28 @@ export class ProductsService {
                 displayImages = [{ secure_url: book.coverImage, public_id: null }];
             }
             
+            // Accept both categoryIds and categories as optional
+            let rawCategories = (book as any).categories;
+            if (typeof rawCategories === 'string') {
+                try {
+                    rawCategories = JSON.parse(rawCategories);
+                } catch {
+                    rawCategories = undefined;
+                }
+            }
+            const categoryIds = Array.isArray(book.categoryIds) && book.categoryIds.length > 0
+                ? book.categoryIds
+                : (Array.isArray(rawCategories) && rawCategories.length > 0 ? rawCategories : undefined);
             const bookData = {
                 name: book.name,
                 description: book.description,
-                stock: book.qty,
-                sellingPrice: book.sellingPrice,
-                normalPrice: book.normalPrice,
+                stock: Number(book.qty),
+                sellingPrice: Number(book.sellingPrice),
+                normalPrice: Number(book.normalPrice),
                 commission: book.commission,
                 BookFormat: book.format as any,
                 format: book.format,
                 language: book.language,
-                category: book.category as any,
                 genre: book.genre as any,
                 rated: book.rated,
                 isbn: book.isbn,
@@ -615,12 +663,21 @@ export class ProductsService {
                 storeId: null, // TODO: Set default storeId
                 displayImages: displayImages,
                 isActive: true,
-                status: 'active'
+                status: 'active',
+                ...(categoryIds ? { categories: { connect: categoryIds.map(id => ({ id })) } } : {})
             };
             
             console.log(colors.green(`Book data prepared for: ${book.name}`));
             const createdBook = await this.prisma.product.create({
-                data: bookData
+                data: bookData,
+                include: {
+                    categories: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
+                }
             });
             
             console.log(colors.green(`Book created successfully: ${createdBook.id}`));
@@ -746,17 +803,28 @@ export class ProductsService {
                     // If already a URL, just use it
                     displayImages = [{ secure_url: book.coverImage, public_id: null }];
                 }
+                // Accept both categoryIds and categories as optional
+                let rawCategories = (book as any).categories;
+                if (typeof rawCategories === 'string') {
+                    try {
+                        rawCategories = JSON.parse(rawCategories);
+                    } catch {
+                        rawCategories = undefined;
+                    }
+                }
+                const categoryIds = Array.isArray(book.categoryIds) && book.categoryIds.length > 0
+                    ? book.categoryIds
+                    : (Array.isArray(rawCategories) && rawCategories.length > 0 ? rawCategories : undefined);
                 const bookData = {
                     name: book.name,
                     description: book.description,
-                    stock: book.qty,
+                    stock: Number(book.qty),
                     sellingPrice: book.sellingPrice,
                     normalPrice: book.normalPrice,
                     commission: book.commission,
                     BookFormat: book.format as any,
                     format: book.format,
                     language: book.language,
-                    category: book.category as any,
                     genre: book.genre as any,
                     rated: book.rated,
                     isbn: book.isbn,
@@ -764,11 +832,20 @@ export class ProductsService {
                     storeId: null, // TODO: Set default storeId
                     displayImages: displayImages,
                     isActive: true,
-                    status: 'active'
+                    status: 'active',
+                    ...(categoryIds ? { categories: { connect: categoryIds.map(id => ({ id })) } } : {})
                 };
                 console.log(colors.green(`Book data prepared for: ${book.name}`));
                 const createdBook = await this.prisma.product.create({
-                    data: bookData
+                    data: bookData,
+                    include: {
+                        categories: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
+                    }
                 });
                 createdBooks.push(createdBook);
                 console.log(colors.green(`Book created successfully: ${createdBook.id}`));
@@ -799,7 +876,7 @@ export class ProductsService {
                     qty: Number(row.qty),
                     sellingPrice: Number(row.sellingPrice),
                     normalPrice: Number(row.normalPrice),
-                    category: row.category,
+                    categoryIds: row.category ? [row.category] : [],
                     language: row.language,
                     format: row.format,
                     genre: row.genre,
@@ -825,7 +902,7 @@ export class ProductsService {
                     qty: Number(row.qty),
                     sellingPrice: Number(row.sellingPrice),
                     normalPrice: Number(row.normalPrice),
-                    category: row.category,
+                    categoryIds: row.category ? [row.category] : [],
                     language: row.language,
                     format: row.format,
                     genre: row.genre,

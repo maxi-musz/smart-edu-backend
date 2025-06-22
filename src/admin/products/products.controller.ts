@@ -77,39 +77,14 @@ export class ProductsController {
     }
 
     @Post('add-new')
-    @UseInterceptors(DynamicFileFieldsInterceptor)
+    @UseInterceptors(FileInterceptor('coverImage'))
     async addBook(
-        @Body() formData: any,
-        @UploadedFiles() files: Record<string, Express.Multer.File[]>
+    @Body() formData: any,
+    @UploadedFile() coverImage: Express.Multer.File
     ) {
-        console.log('Form data received:', formData);
-        
-        // Parse and validate single book using service
-        const book = await this.productsService.parseFormDataAndValidateBook(formData);
-        
-        // Validate uploaded files
-        this.productsService.validateUploadedFiles(files);
-        
-        // Group images for the single book
-        const coverImages: Express.Multer.File[] = [];
-        
-        // Process files using the indexed format (0-4)
-        if (files) {
-            Object.keys(files).forEach(imageKey => {
-                const match = imageKey.match(/display_images\[(\d+)\]/);
-                if (match && files[imageKey] && files[imageKey].length > 0) {
-                    const imageIndex = parseInt(match[1], 10);
-                    const file = files[imageKey][0];
-                    
-                    if (imageIndex >= 0 && imageIndex < 5) {
-                        coverImages[imageIndex] = file;
-                        console.log(`Mapped image ${imageIndex} to position ${imageIndex}`);
-                    }
-                }
-            });
-        }
+    const coverImages = coverImage ? [coverImage] : [];
 
-        return this.productsService.addBook(book, coverImages);
+    return this.productsService.addBook(formData, coverImages);
     }
 
     @Post('books/upload')

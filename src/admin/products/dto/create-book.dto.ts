@@ -102,8 +102,9 @@ export class CreateBookDto {
   @IsNotEmpty()
   sellingPrice: number;
 
-  @IsEnum(BookCategory)
-  category: BookCategory;
+  @IsArray()
+  @IsString({ each: true })
+  categoryIds: string[];
 
   @IsEnum(BookLanguage)
   language: BookLanguage;
