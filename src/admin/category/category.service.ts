@@ -116,6 +116,7 @@ export class CategoryService {
 
             console.log(colors.magenta(`Total of ${genres.length} genres found`));
             const formattedGenres = genres.map(g => ({
+                id: g.id,
                 name: g.name,
                 description: g.description,
                 createdByName: g.createdByName,
@@ -170,6 +171,7 @@ export class CategoryService {
             const languages = await this.prisma.language.findMany({ orderBy: { createdAt: 'desc' } });
             console.log(colors.magenta(`Total of ${languages.length} languages found`));
             const formattedLanguages = languages.map(l => ({
+                id: l.id,
                 name: l.name,
                 description: l.description,
                 createdByName: l.createdByName,
@@ -223,6 +225,7 @@ export class CategoryService {
             const formats = await this.prisma.format.findMany({ orderBy: { createdAt: 'desc' } });
             console.log(colors.magenta(`Total of ${formats.length} formats found`));
             const formattedFormats = formats.map(f => ({
+                id: f.id,
                 name: f.name,
                 description: f.description,
                 createdByName: f.createdByName,

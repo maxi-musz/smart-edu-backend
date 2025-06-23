@@ -2,7 +2,8 @@ export class ProductResponseDto {
     id: string;
     name: string;
     description?: string;
-    price: number;
+    sellingPrice: number;
+    normalPrice: number;
     stock: number;
     images: string[];
     categoryId: string;
@@ -13,11 +14,12 @@ export class ProductResponseDto {
     
     // Book-specific fields
     isbn?: string;
-    format?: string;
+    format?: string[];
     publisher?: string;
     author?: string;
     pages?: number;
-    language?: string;
+    language?: string[];
+    genre?: string[];
     publishedDate?: Date;
     
     createdAt: Date;

@@ -92,7 +92,7 @@ export class OrdersService {
                                         name: true,
                                         isbn: true,
                                         publisher: true,
-                                        format: true
+                                        formats: { select: { id: true, name: true } },
                                     }
                                 }
                             }
@@ -210,7 +210,9 @@ export class OrdersService {
                 price: item.price,
                 isbn: item.product.isbn,
                 publisher: item.product.publisher,
-                format: item.product.format
+                format: item.product.formats && item.product.formats.length > 0
+                    ? item.product.formats.map(f => f.name).join(', ')
+                    : 'N/A',
             })),
             total: order.total,
             status: this.mapOrderStatus(order.status),

@@ -106,14 +106,17 @@ export class CreateBookDto {
   @IsString({ each: true })
   categoryIds: string[];
 
-  @IsEnum(BookLanguage)
-  language: BookLanguage;
+  @IsArray()
+  @IsString({ each: true })
+  languageIds: string[];
 
-  @IsEnum(BookFormat)
-  format: BookFormat;
+  @IsArray()
+  @IsString({ each: true })
+  formatIds: string[];
 
-  @IsEnum(BookGenre)
-  genre: BookGenre;
+  @IsArray()
+  @IsString({ each: true })
+  genreIds: string[];
 
   @IsString()
   rated: string;

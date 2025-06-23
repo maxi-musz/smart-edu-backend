@@ -218,7 +218,7 @@ model User {
 }
 
 model Product {
-  id            String      @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String
   description   String?
   sellingPrice  Float
@@ -227,26 +227,29 @@ model Product {
   displayImages Json? // [{ secure_url: string, public_id: string }]
   storeId       String?
   commission    String?
-  BookFormat    BookFormat  @default(hardcover)
-  isActive      Boolean     @default(true)
-  status        String      @default("active") // active, inactive, suspended
+  BookFormat    BookFormat @default(hardcover)
+  isActive      Boolean    @default(true)
+  status        String     @default("active") // active, inactive, suspended
   rated         String?
-  isbn          String?     @unique
-  format        String? // Hardcover, Paperback, E-book, etc.
+  isbn          String?    @unique
   publisher     String? // Publisher name
   author        String? // Author name
   pages         Int? // Number of pages
-  language      String? // Language of the book
   publishedDate DateTime? // Publication date
-  genre         BookGenre? // Added genre field
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Add many-to-many relations:
+  categories Category[] @relation("ProductCategories")
+  languages  Language[] @relation("ProductLanguages")
+  genres     Genre[]    @relation("ProductGenres")
+  formats    Format[]   @relation("ProductFormats")
+
   // Relations
-  store         Store?      @relation(fields: [storeId], references: [id])
-  cartItems     CartItem[]
-  orderItems    OrderItem[]
-  referrals     Referral[]
-  categories    Category[]  @relation("ProductCategories")
+  store      Store?      @relation(fields: [storeId], references: [id])
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  referrals  Referral[]
 }
 
 model Category {
@@ -370,36 +373,39 @@ model Notification {
 }
 
 model Genre {
-  id             String   @id @default(cuid())
-  name           String   @unique
+  id             String    @id @default(cuid())
+  name           String    @unique
   description    String?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   createdByName  String?
   createdByEmail String?
+  products       Product[] @relation("ProductGenres")
 }
 
 model Language {
-  id             String   @id @default(cuid())
-  name           String   @unique
+  id             String    @id @default(cuid())
+  name           String    @unique
   description    String?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   createdByName  String?
   createdByEmail String?
+  products       Product[] @relation("ProductLanguages")
 }
 
 model Format {
-  id             String   @id @default(cuid())
-  name           String   @unique
+  id             String    @id @default(cuid())
+  name           String    @unique
   description    String?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   createdByName  String?
   createdByEmail String?
+  products       Product[] @relation("ProductFormats")
 }
 
 model AgeRating {

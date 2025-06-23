@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query, Put, Post, Body, UseGuards, UseIntercept
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { JwtGuard } from '../../auth/guard';
-import { GetProductsDto } from './dto/get-products.dto';
+import { GetProductsDto, GetProductByIdDto } from './dto/get-products.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { DynamicFileFieldsInterceptor } from './interceptors/dynamic-file-fields.interceptor';
 
@@ -45,8 +45,8 @@ export class ProductsController {
     }
 
     @Get(':id')
-    async getProductById(@Param('id') id: string) {
-        return this.productsService.getProductById(id);
+    async getProductById(@Param() params: GetProductByIdDto) {
+        return this.productsService.getProductById(params.id);
     }
 
     @Put(':id/status')
@@ -87,9 +87,9 @@ export class ProductsController {
     return this.productsService.addBook(formData, coverImages);
     }
 
-    @Post('books/upload')
-    @UseInterceptors(FileInterceptor('file'))
-    async addBooksFromFile(@UploadedFile() file: Express.Multer.File) {
-        return this.productsService.addBooksFromFile(file);
-    }
+    // @Post('books/upload')
+    // @UseInterceptors(FileInterceptor('file'))
+    // async addBooksFromFile(@UploadedFile() file: Express.Multer.File) {
+    //     return this.productsService.addBooksFromFile(file);
+    // }
 } 

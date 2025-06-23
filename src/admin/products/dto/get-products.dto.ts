@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber, IsIn, Min, Max, IsBoolean } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsIn, Min, Max, IsBoolean, IsNotEmpty } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class GetProductsDto {
@@ -63,4 +63,10 @@ export class GetProductsDto {
     @IsOptional()
     @IsIn(['asc', 'desc'])
     sortOrder?: 'asc' | 'desc';
+}
+
+export class GetProductByIdDto {
+    @IsString()
+    @IsNotEmpty()
+    id: string;
 } 

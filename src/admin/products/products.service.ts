@@ -7,6 +7,7 @@ import * as csv from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
 import { CloudinaryService } from 'src/shared/services/cloudinary.service';
 import { PRODUCT_VALIDATION_LIMITS, VALIDATION_MESSAGES } from './constants/validation-limits';
+import { ProductResponseDto } from './dto/product-response.dto';
 
 @Injectable()
 export class ProductsService {
@@ -41,12 +42,8 @@ export class ProductsService {
                     skip,
                     take: limit,
                     include: {
-                        categories: {
-                            select: {
-                                id: true,
-                                name: true
-                            }
-                        }
+                        categories: { select: { id: true, name: true } },
+                        formats: { select: { id: true, name: true } },
                     },
                     orderBy: { createdAt: 'desc' }
                 }),
@@ -67,7 +64,9 @@ export class ProductsService {
                         id: product.id,
                         bookName: product.name,
                         publishedBy: product.publisher || 'N/A',
-                        bookFormat: product.format || 'N/A',
+                        bookFormat: product.formats && product.formats.length > 0
+                            ? product.formats.map(f => f.name).join(', ')
+                            : 'N/A',
                         categories: product.categories.map(c => ({ id: c.id, name: c.name })),
                         isbn: product.isbn || 'N/A',
                         sellingPrice: product.sellingPrice,
@@ -142,7 +141,8 @@ export class ProductsService {
 
             // Filter by format
             if (format) {
-                whereClause.format = { contains: format, mode: 'insensitive' as const };
+                // Remove or update this block, as filtering by many-to-many relation requires a different approach
+                whereClause.formats = { some: { name: { contains: format, mode: 'insensitive' as const } } };
             }
 
             // Filter by publisher
@@ -241,20 +241,11 @@ export class ProductsService {
             const product = await this.prisma.product.findUnique({
                 where: { id },
                 include: {
-                    store: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                            phone: true
-                        }
-                    },
-                    categories: {
-                        select: {
-                            id: true,
-                            name: true
-                        }
-                    }
+                    store: { select: { id: true, name: true, email: true } },
+                    categories: { select: { id: true, name: true } },
+                    languages: { select: { id: true, name: true } },
+                    genres: { select: { id: true, name: true } },
+                    formats: { select: { id: true, name: true } },
                 }
             });
 
@@ -262,8 +253,43 @@ export class ProductsService {
                 throw new NotFoundException('Product not found');
             }
 
+            // Map to ProductResponseDto
+            const response: ProductResponseDto = {
+                id: product.id,
+                name: product.name,
+                description: product.description ?? undefined,
+                sellingPrice: product.sellingPrice,
+                normalPrice: product.normalPrice,
+                stock: product.stock,
+                images: Array.isArray(product.displayImages) ? product.displayImages.map((img: any) => img.secure_url) : [],
+                categoryId: product.categories && product.categories[0] ? product.categories[0].id : '',
+                storeId: product.storeId ?? '',
+                commission: product.commission ? Number(product.commission) : 0,
+                isActive: product.isActive,
+                status: product.status,
+                isbn: product.isbn ?? undefined,
+                format: product.formats ? product.formats.map(f => f.name) : [],
+                publisher: product.publisher ?? undefined,
+                author: product.author ?? undefined,
+                pages: product.pages ?? undefined,
+                language: product.languages ? product.languages.map(l => l.name) : [],
+                genre: product.genres ? product.genres.map(g => g.name) : [],
+                publishedDate: product.publishedDate ?? undefined,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt,
+                store: product.store ? {
+                    id: product.store.id,
+                    name: product.store.name,
+                    email: product.store.email
+                } : undefined,
+                category: product.categories && product.categories[0] ? {
+                    id: product.categories[0].id,
+                    name: product.categories[0].name
+                } : undefined
+            };
+
             console.log(colors.magenta('Product retrieved successfully'));
-            return new ApiResponse(true, "", product);
+            return new ApiResponse(true, 'Product retrieved successfully', response);
 
         } catch (error) {
             console.log(colors.red('Error fetching product:'), error);
@@ -381,32 +407,22 @@ export class ProductsService {
         try {
             // Get all filter options in parallel for better performance
             const [formats, publishers, authors, categories] = await Promise.all([
-                // Available formats
-                this.prisma.product.findMany({
-                    where: { format: { not: null } },
-                    select: { format: true },
-                    distinct: ['format']
-                }),
-                // Available publishers
+                this.prisma.format.findMany({ select: { id: true, name: true } }),
                 this.prisma.product.findMany({
                     where: { publisher: { not: null } },
                     select: { publisher: true },
                     distinct: ['publisher']
                 }),
-                // Available authors
                 this.prisma.product.findMany({
                     where: { author: { not: null } },
                     select: { author: true },
                     distinct: ['author']
                 }),
-                // Available categories
-                this.prisma.category.findMany({
-                    select: { id: true, name: true }
-                })
+                this.prisma.category.findMany({ select: { id: true, name: true } })
             ]);
 
             const filterOptions = {
-                formats: formats.map(item => item.format).filter(Boolean),
+                formats: formats.map(f => ({ id: f.id, name: f.name })),
                 publishers: publishers.map(item => item.publisher).filter(Boolean),
                 authors: authors.map(item => item.author).filter(Boolean),
                 categories: categories.map(cat => ({ id: cat.id, name: cat.name })),
@@ -491,70 +507,70 @@ export class ProductsService {
         }
     }
 
-    async parseFormDataAndValidateBook(formData: any): Promise<CreateBookDto> {
-        console.log('Parsing form data for single book...');
+    // async parseFormDataAndValidateBook(formData: any): Promise<CreateBookDto> {
+    //     console.log('Parsing form data for single book...');
         
-        if (!formData || Object.keys(formData).length === 0) {
-            throw new BadRequestException('No form data received');
-        }
+    //     if (!formData || Object.keys(formData).length === 0) {
+    //         throw new BadRequestException('No form data received');
+    //     }
 
-        // Extract book data from form fields (without array indexing)
-        const name = formData.name;
-        const description = formData.description;
-        const qty = formData.qty;
-        const sellingPrice = formData.sellingPrice;
-        const normalPrice = formData.normalPrice;
-        const category = formData.category;
-        const language = formData.language;
-        const format = formData.format;
-        const genre = formData.genre;
-        const rated = formData.rated;
-        const isbn = formData.isbn;
-        const publisher = formData.publisher;
-        const commission = formData.commission;
+    //     // Extract book data from form fields (without array indexing)
+    //     const name = formData.name;
+    //     const description = formData.description;
+    //     const qty = formData.qty;
+    //     const sellingPrice = formData.sellingPrice;
+    //     const normalPrice = formData.normalPrice;
+    //     const category = formData.category;
+    //     const language = formData.language;
+    //     const format = formData.format;
+    //     const genre = formData.genre;
+    //     const rated = formData.rated;
+    //     const isbn = formData.isbn;
+    //     const publisher = formData.publisher;
+    //     const commission = formData.commission;
 
-        if (!name) {
-            throw new BadRequestException('Book name is required');
-        }
+    //     if (!name) {
+    //         throw new BadRequestException('Book name is required');
+    //     }
 
-        console.log(`Processing book: ${name}`);
+    //     console.log(`Processing book: ${name}`);
         
-        // Normalize enum values
-        const normalizedCategory = category?.trim().toLowerCase();
-        const normalizedGenre = genre?.trim().toLowerCase();
-        const normalizedFormat = format?.trim().toLowerCase();
-        const normalizedLanguage = language?.trim().toLowerCase();
+    //     // Normalize enum values
+    //     const normalizedCategory = category?.trim().toLowerCase();
+    //     const normalizedGenre = genre?.trim().toLowerCase();
+    //     const normalizedFormat = format?.trim().toLowerCase();
+    //     const normalizedLanguage = language?.trim().toLowerCase();
         
-        // Handle special case for 'ebook' -> 'e_book'
-        const finalFormat = normalizedFormat === 'ebook' ? 'e_book' : normalizedFormat;
+    //     // Handle special case for 'ebook' -> 'e_book'
+    //     const finalFormat = normalizedFormat === 'ebook' ? 'e_book' : normalizedFormat;
         
-        // Validate enum values
-        this.validateEnumValues(category, genre, format, language, 0);
+    //     // Validate enum values
+    //     this.validateEnumValues(category, genre, format, language, 0);
         
-        // Validate individual book data
-        const bookData = {
-            name: name,
-            description: description || '',
-            qty: parseInt(qty),
-            sellingPrice: parseFloat(sellingPrice),
-            normalPrice: parseFloat(normalPrice),
-            categoryIds: category ? [category] : [],
-            language: normalizedLanguage as BookLanguage,
-            format: finalFormat as BookFormat,
-            genre: normalizedGenre as BookGenre,
-            rated: rated || '',
-            isbn: isbn || '',
-            publisher: publisher || '',
-            commission: commission || '0',
-            coverImage: '' // will be set after upload
-        };
+    //     // Validate individual book data
+    //     const bookData = {
+    //         name: name,
+    //         description: description || '',
+    //         qty: parseInt(qty),
+    //         sellingPrice: parseFloat(sellingPrice),
+    //         normalPrice: parseFloat(normalPrice),
+    //         categoryIds: category ? [category] : [],
+    //         language: normalizedLanguage as BookLanguage,
+    //         format: finalFormat as BookFormat,
+    //         genre: normalizedGenre as BookGenre,
+    //         rated: rated || '',
+    //         isbn: isbn || '',
+    //         publisher: publisher || '',
+    //         commission: commission || '0',
+    //         coverImage: '' // will be set after upload
+    //     };
         
-        // Validate book data
-        this.validateBookData(bookData, 0);
+    //     // Validate book data
+    //     this.validateBookData(bookData, 0);
         
-        console.log(`Book data:`, bookData);
-        return bookData;
-    }
+    //     console.log(`Book data:`, bookData);
+    //     return bookData;
+    // }
 
     public validateUploadedFiles(files: Record<string, Express.Multer.File[]>) {
         if (!files || Object.keys(files).length === 0) {
@@ -646,17 +662,112 @@ export class ProductsService {
             const categoryIds = Array.isArray(book.categoryIds) && book.categoryIds.length > 0
                 ? book.categoryIds
                 : (Array.isArray(rawCategories) && rawCategories.length > 0 ? rawCategories : undefined);
-            const bookData = {
+
+             // Accept both formatIds and fomrats as optional
+             let rawFormats = (book as any).languages;
+             if (typeof rawFormats === 'string') {
+                 try {
+                    rawFormats = JSON.parse(rawFormats);
+                 } catch {
+                    rawFormats = undefined;
+                 }
+             }
+             const formatIds = Array.isArray(book.formatIds) && book.formatIds.length > 0
+                 ? book.formatIds
+                 : (Array.isArray(rawFormats) && rawFormats.length > 0 ? rawFormats : undefined);
+
+                 // Accept both languageIds and languages as optional
+                let rawLanguages = (book as any).languages;
+                if (typeof rawLanguages === 'string') {
+                    try {
+                        rawLanguages = JSON.parse(rawLanguages);
+                    } catch {
+                        rawLanguages = undefined;
+                    }
+                }
+                const languageIds = Array.isArray(book.languageIds) && book.languageIds.length > 0
+                    ? book.languageIds
+                    : (Array.isArray(rawLanguages) && rawLanguages.length > 0 ? rawLanguages : undefined);
+
+
+                    // genres
+                    let rawGenres = (book as any).genres;
+                    if (typeof rawGenres === 'string') {
+                        try {
+                            rawGenres = JSON.parse(rawGenres);
+                        } catch {
+                            rawGenres = undefined;
+                        }
+                    }
+                    const genreIds = Array.isArray(book.genreIds) && book.genreIds.length > 0
+                        ? book.genreIds
+                        : (Array.isArray(rawGenres) && rawGenres.length > 0 ? rawGenres : undefined);
+
+            
+
+
+            if (categoryIds && categoryIds.length > 0) {
+                const foundCategories = await this.prisma.category.findMany({
+                    where: { id: { in: categoryIds } },
+                    select: { id: true }
+                });
+                const foundIds = foundCategories.map(cat => cat.id);
+                const missingIds = categoryIds.filter(id => !foundIds.includes(id));
+                if (missingIds.length > 0) {
+                    throw new BadRequestException(`Invalid category ID(s): ${missingIds.join(', ')}`);
+                }
+            }
+
+            const safeLanguageIds = Array.isArray(languageIds) ? languageIds : [];
+            const safeGenreIds = Array.isArray(genreIds) ? genreIds : [];
+            const safeFormatIds = Array.isArray(formatIds) ? formatIds : [];
+
+            // Existence check for language, genre, and format if they look like IDs (cuid)
+            if (safeLanguageIds.length > 0) {
+                const foundLanguages = await this.prisma.language.findMany({
+                    where: { id: { in: safeLanguageIds } },
+                    select: { id: true }
+                });
+                const foundIds = foundLanguages.map(cat => cat.id);
+                const missingIds = safeLanguageIds.filter(id => !foundIds.includes(id));
+                if (missingIds.length > 0) {
+                    console.log(colors.red(`Invalid language ID(s): ${missingIds.join(', ')}`))
+                    throw new BadRequestException(`Invalid language ID(s): ${missingIds.join(', ')}`);
+                }
+            }
+            if (safeGenreIds.length > 0) {
+                const foundGenres = await this.prisma.genre.findMany({
+                    where: { id: { in: safeGenreIds } },
+                    select: { id: true }
+                });
+                const foundIds = foundGenres.map(cat => cat.id);
+                const missingIds = safeGenreIds.filter(id => !foundIds.includes(id));
+                if (missingIds.length > 0) {
+                    console.log(colors.red(`Invalid genre ID(s): ${missingIds.join(', ')}`))
+                    throw new BadRequestException(`Invalid genre ID(s): ${missingIds.join(', ')}`);
+                }
+            }
+            if (safeFormatIds.length > 0) {
+                const foundFormats = await this.prisma.format.findMany({
+                    where: { id: { in: safeFormatIds } },
+                    select: { id: true }
+                });
+                const foundIds = foundFormats.map(cat => cat.id);
+                const missingIds = safeFormatIds.filter(id => !foundIds.includes(id));
+                if (missingIds.length > 0) {
+                    console.log(colors.red(`Invalid format ID(s): ${missingIds.join(', ')}`))
+                    throw new BadRequestException(`Invalid format ID(s): ${missingIds.join(', ')}`);
+                }
+            }
+
+            const bookData: any = {
                 name: book.name,
                 description: book.description,
                 stock: Number(book.qty),
                 sellingPrice: Number(book.sellingPrice),
                 normalPrice: Number(book.normalPrice),
                 commission: book.commission,
-                BookFormat: book.format as any,
-                format: book.format,
-                language: book.language,
-                genre: book.genre as any,
+                // BookFormat: formatIds[0] ?? undefined,
                 rated: book.rated,
                 isbn: book.isbn,
                 publisher: book.publisher,
@@ -664,19 +775,20 @@ export class ProductsService {
                 displayImages: displayImages,
                 isActive: true,
                 status: 'active',
-                ...(categoryIds ? { categories: { connect: categoryIds.map(id => ({ id })) } } : {})
+                ...(categoryIds ? { categories: { connect: categoryIds.map((id: string) => ({ id })) } } : {}),
+                ...(safeLanguageIds.length ? { languages: { connect: safeLanguageIds.map((id: string) => ({ id })) } } : {}),
+                ...(safeGenreIds.length ? { genres: { connect: safeGenreIds.map((id: string) => ({ id })) } } : {}),
+                ...(safeFormatIds.length ? { formats: { connect: safeFormatIds.map((id: string) => ({ id })) } } : {}),
             };
             
             console.log(colors.green(`Book data prepared for: ${book.name}`));
             const createdBook = await this.prisma.product.create({
                 data: bookData,
                 include: {
-                    categories: {
-                        select: {
-                            id: true,
-                            name: true
-                        }
-                    }
+                    categories: { select: { id: true, name: true } },
+                    languages: { select: { id: true, name: true } },
+                    genres: { select: { id: true, name: true } },
+                    formats: { select: { id: true, name: true } },
                 }
             });
             
@@ -767,159 +879,214 @@ export class ProductsService {
         }
     }
 
-    async addBooksManually(books: CreateBookDto[], coverImagesPerBook: Express.Multer.File[][]) {
-        console.log(colors.cyan(`Admin attempting to add ${books.length} books`))
+    // async addBooksManually(books: CreateBookDto[], coverImagesPerBook: Express.Multer.File[][]) {
+    //     console.log(colors.cyan(`Admin attempting to add ${books.length} books`))
        
-        const isbns = books.map(book => book.isbn).filter(isbn => isbn); 
-        if (isbns.length > 0) {
-            const existingBooks = await this.prisma.product.findMany({
-                where: { isbn: { in: isbns } },
-                select: { isbn: true }
-            });
-            if (existingBooks.length > 0) {
-                const duplicates = existingBooks.map(b => b.isbn);
-                console.log(colors.red(`Duplicate ISBN(s) found: ${duplicates.join(', ')}`))
-                throw new BadRequestException(`Duplicate ISBN(s) found: ${duplicates.join(', ')}`);
-            }
-        }
+    //     const isbns = books.map(book => book.isbn).filter(isbn => isbn); 
+    //     if (isbns.length > 0) {
+    //         const existingBooks = await this.prisma.product.findMany({
+    //             where: { isbn: { in: isbns } },
+    //             select: { isbn: true }
+    //         });
+    //         if (existingBooks.length > 0) {
+    //             const duplicates = existingBooks.map(b => b.isbn);
+    //             console.log(colors.red(`Duplicate ISBN(s) found: ${duplicates.join(', ')}`))
+    //             throw new BadRequestException(`Duplicate ISBN(s) found: ${duplicates.join(', ')}`);
+    //         }
+    //     }
 
-        try {
-            const createdBooks: any[] = [];
-            for (let i = 0; i < books.length; i++) {
-                const book = books[i];
-                console.log(colors.yellow(`Processing book: ${book.name}`));
-                let displayImages: any[] = [];
-                // If coverImagesPerBook is provided and has files for this book, upload them
-                if (coverImagesPerBook && coverImagesPerBook[i] && coverImagesPerBook[i].length > 0) {
-                    const uploadResults = await this.cloudinaryService.uploadToCloudinary(
-                        coverImagesPerBook[i],
-                        'acces-sellr/book-covers'
-                    );
-                    displayImages = uploadResults.map(res => ({
-                        secure_url: res.secure_url,
-                        public_id: res.public_id
-                    }));
-                } else if (book.coverImage && typeof book.coverImage === 'string' && book.coverImage.startsWith('http')) {
-                    // If already a URL, just use it
-                    displayImages = [{ secure_url: book.coverImage, public_id: null }];
-                }
-                // Accept both categoryIds and categories as optional
-                let rawCategories = (book as any).categories;
-                if (typeof rawCategories === 'string') {
-                    try {
-                        rawCategories = JSON.parse(rawCategories);
-                    } catch {
-                        rawCategories = undefined;
-                    }
-                }
-                const categoryIds = Array.isArray(book.categoryIds) && book.categoryIds.length > 0
-                    ? book.categoryIds
-                    : (Array.isArray(rawCategories) && rawCategories.length > 0 ? rawCategories : undefined);
-                const bookData = {
-                    name: book.name,
-                    description: book.description,
-                    stock: Number(book.qty),
-                    sellingPrice: book.sellingPrice,
-                    normalPrice: book.normalPrice,
-                    commission: book.commission,
-                    BookFormat: book.format as any,
-                    format: book.format,
-                    language: book.language,
-                    genre: book.genre as any,
-                    rated: book.rated,
-                    isbn: book.isbn,
-                    publisher: book.publisher,
-                    storeId: null, // TODO: Set default storeId
-                    displayImages: displayImages,
-                    isActive: true,
-                    status: 'active',
-                    ...(categoryIds ? { categories: { connect: categoryIds.map(id => ({ id })) } } : {})
-                };
-                console.log(colors.green(`Book data prepared for: ${book.name}`));
-                const createdBook = await this.prisma.product.create({
-                    data: bookData,
-                    include: {
-                        categories: {
-                            select: {
-                                id: true,
-                                name: true
-                            }
-                        }
-                    }
-                });
-                createdBooks.push(createdBook);
-                console.log(colors.green(`Book created successfully: ${createdBook.id}`));
-            }
-            console.log(colors.magenta(`Successfully added ${createdBooks.length} books`));
-            return new ApiResponse(true, `Successfully added ${createdBooks.length} books`, {
-                count: createdBooks.length,
-                books: createdBooks
-            });
-        } catch (error) {
-            console.log(colors.red('Error adding books:'), error);
-            throw new BadRequestException('Failed to add books: ' + error.message);
-        }
-    }
+    //     try {
+    //         const createdBooks: any[] = [];
+    //         for (let i = 0; i < books.length; i++) {
+    //             const book = books[i];
+    //             console.log(colors.yellow(`Processing book: ${book.name}`));
+    //             let displayImages: any[] = [];
+    //             // If coverImagesPerBook is provided and has files for this book, upload them
+    //             if (coverImagesPerBook && coverImagesPerBook[i] && coverImagesPerBook[i].length > 0) {
+    //                 const uploadResults = await this.cloudinaryService.uploadToCloudinary(
+    //                     coverImagesPerBook[i],
+    //                     'acces-sellr/book-covers'
+    //                 );
+    //                 displayImages = uploadResults.map(res => ({
+    //                     secure_url: res.secure_url,
+    //                     public_id: res.public_id
+    //                 }));
+    //             } else if (book.coverImage && typeof book.coverImage === 'string' && book.coverImage.startsWith('http')) {
+    //                 // If already a URL, just use it
+    //                 displayImages = [{ secure_url: book.coverImage, public_id: null }];
+    //             }
+    //             // Accept both categoryIds and categories as optional
+    //             let rawCategories = (book as any).categories;
+    //             if (typeof rawCategories === 'string') {
+    //                 try {
+    //                     rawCategories = JSON.parse(rawCategories);
+    //                 } catch {
+    //                     rawCategories = undefined;
+    //                 }
+    //             }
+    //             const categoryIds = Array.isArray(book.categoryIds) && book.categoryIds.length > 0
+    //                 ? book.categoryIds
+    //                 : (Array.isArray(rawCategories) && rawCategories.length > 0 ? rawCategories : undefined);
 
-    async addBooksFromFile(file: Express.Multer.File) {
-        if (!file) throw new BadRequestException('No file uploaded');
-        let books: CreateBookDto[] = [];
-        try {
-            if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
-                const records = csv.parse(file.buffer.toString(), {
-                    columns: true,
-                    skip_empty_lines: true,
-                });
-                books = records.map((row: any) => ({
-                    name: row.name,
-                    description: row.description,
-                    qty: Number(row.qty),
-                    sellingPrice: Number(row.sellingPrice),
-                    normalPrice: Number(row.normalPrice),
-                    categoryIds: row.category ? [row.category] : [],
-                    language: row.language,
-                    format: row.format,
-                    genre: row.genre,
-                    rated: row.rated,
-                    coverImage: row.coverImage,
-                    isbn: row.isbn,
-                    publisher: row.publisher,
-                    commission: String(row.commission ?? '0'),
-                }));
-            } else if (
-                file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                file.mimetype === 'application/vnd.ms-excel' ||
-                file.originalname.endsWith('.xlsx') ||
-                file.originalname.endsWith('.xls')
-            ) {
-                const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-                const sheetName = workbook.SheetNames[0];
-                const sheet = workbook.Sheets[sheetName];
-                const records = XLSX.utils.sheet_to_json(sheet);
-                books = records.map((row: any) => ({
-                    name: row.name,
-                    description: row.description,
-                    qty: Number(row.qty),
-                    sellingPrice: Number(row.sellingPrice),
-                    normalPrice: Number(row.normalPrice),
-                    categoryIds: row.category ? [row.category] : [],
-                    language: row.language,
-                    format: row.format,
-                    genre: row.genre,
-                    rated: row.rated,
-                    coverImage: row.coverImage,
-                    isbn: row.isbn,
-                    publisher: row.publisher,
-                    commission: String(row.commission ?? '0'),
-                }));
-            } else {
-                throw new BadRequestException('Unsupported file type');
-            }
+    //             // Accept language, genre, and format as arrays or single values
+    //             let languageIds = (book as any).language;
+    //             if (typeof languageIds === 'string' && languageIds.startsWith('[')) {
+    //                 try { languageIds = JSON.parse(languageIds); } catch { languageIds = book.language; }
+    //             }
+    //             if (!Array.isArray(languageIds)) languageIds = languageIds ? [languageIds] : [];
 
-            console.log(colors.magenta("New books successfully added"))
-            return this.addBooksManually(books, []);
-        } catch (error) {
-            throw new BadRequestException('Failed to parse file: ' + error.message);
-        }
-    }
+    //             let genreIds = (book as any).genre;
+    //             if (typeof genreIds === 'string' && genreIds.startsWith('[')) {
+    //                 try { genreIds = JSON.parse(genreIds); } catch { genreIds = book.genre; }
+    //             }
+    //             if (!Array.isArray(genreIds)) genreIds = genreIds ? [genreIds] : [];
+
+    //             let formatIds = (book as any).format;
+    //             if (typeof formatIds === 'string' && formatIds.startsWith('[')) {
+    //                 try { formatIds = JSON.parse(formatIds); } catch { formatIds = book.format; }
+    //             }
+    //             if (!Array.isArray(formatIds)) formatIds = formatIds ? [formatIds] : [];
+
+    //             const safeLanguageIds = Array.isArray(languageIds) ? languageIds : [];
+    //             const safeGenreIds = Array.isArray(genreIds) ? genreIds : [];
+    //             const safeFormatIds = Array.isArray(formatIds) ? formatIds : [];
+
+    //             if (categoryIds && categoryIds.length > 0) {
+    //                 const foundCategories = await this.prisma.category.findMany({
+    //                     where: { id: { in: categoryIds } },
+    //                     select: { id: true }
+    //                 });
+    //                 const foundIds = foundCategories.map(cat => cat.id);
+    //                 const missingIds = categoryIds.filter(id => !foundIds.includes(id));
+    //                 if (missingIds.length > 0) {
+    //                     throw new BadRequestException(`Invalid category ID(s): ${missingIds.join(', ')}`);
+    //                 }
+    //             }
+
+    //             // Existence check for language, genre, and format if they look like IDs (cuid)
+    //             const cuidRegex = /^c[a-z0-9]{24}$/i;
+    //             for (const id of languageIds) {
+    //                 if (typeof id === 'string' && cuidRegex.test(id)) {
+    //                     const foundLanguage = await this.prisma.language.findUnique({ where: { id } });
+    //                     if (!foundLanguage) throw new BadRequestException(`Invalid language ID: ${id}`);
+    //                 }
+    //             }
+    //             for (const id of genreIds) {
+    //                 if (typeof id === 'string' && cuidRegex.test(id)) {
+    //                     const foundGenre = await this.prisma.genre.findUnique({ where: { id } });
+    //                     if (!foundGenre) throw new BadRequestException(`Invalid genre ID: ${id}`);
+    //                 }
+    //             }
+    //             for (const id of formatIds) {
+    //                 if (typeof id === 'string' && cuidRegex.test(id)) {
+    //                     const foundFormat = await this.prisma.format.findUnique({ where: { id } });
+    //                     if (!foundFormat) throw new BadRequestException(`Invalid format ID: ${id}`);
+    //                 }
+    //             }
+
+    //             const bookData: any = {
+    //                 name: book.name,
+    //                 description: book.description,
+    //                 stock: Number(book.qty),
+    //                 sellingPrice: book.sellingPrice,
+    //                 normalPrice: book.normalPrice,
+    //                 commission: book.commission,
+    //                 // BookFormat: formatIds[0] ?? undefined,
+    //                 rated: book.rated,
+    //                 isbn: book.isbn,
+    //                 publisher: book.publisher,
+    //                 storeId: null, // TODO: Set default storeId
+    //                 displayImages: displayImages,
+    //                 isActive: true,
+    //                 status: 'active',
+    //                 ...(categoryIds ? { categories: { connect: categoryIds.map((id: string) => ({ id })) } } : {}),
+    //                 ...(safeLanguageIds.length ? { languages: { connect: safeLanguageIds.map((id: string) => ({ id })) } } : {}),
+    //                 ...(safeGenreIds.length ? { genres: { connect: safeGenreIds.map((id: string) => ({ id })) } } : {}),
+    //                 ...(safeFormatIds.length ? { formats: { connect: safeFormatIds.map((id: string) => ({ id })) } } : {}),
+    //             };
+    //             console.log(colors.green(`Book data prepared for: ${book.name}`));
+    //             const createdBook = await this.prisma.product.create({
+    //                 data: bookData,
+    //                 include: {
+    //                     categories: { select: { id: true, name: true } },
+    //                     languages: { select: { id: true, name: true } },
+    //                     genres: { select: { id: true, name: true } },
+    //                     formats: { select: { id: true, name: true } },
+    //                 }
+    //             });
+    //             createdBooks.push(createdBook);
+    //             console.log(colors.green(`Book created successfully: ${createdBook.id}`));
+    //         }
+    //         console.log(colors.magenta(`Successfully added ${createdBooks.length} books`));
+    //         return new ApiResponse(true, `Successfully added ${createdBooks.length} books`, {
+    //             count: createdBooks.length,
+    //             books: createdBooks
+    //         });
+    //     } catch (error) {
+    //         console.log(colors.red('Error adding books:'), error);
+    //         throw new BadRequestException('Failed to add books: ' + error.message);
+    //     }
+    // }
+
+    // async addBooksFromFile(file: Express.Multer.File) {
+    //     if (!file) throw new BadRequestException('No file uploaded');
+    //     let books: CreateBookDto[] = [];
+    //     try {
+    //         if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+    //             const records = csv.parse(file.buffer.toString(), {
+    //                 columns: true,
+    //                 skip_empty_lines: true,
+    //             });
+    //             books = records.map((row: any) => ({
+    //                 name: row.name,
+    //                 description: row.description,
+    //                 qty: Number(row.qty),
+    //                 sellingPrice: Number(row.sellingPrice),
+    //                 normalPrice: Number(row.normalPrice),
+    //                 categoryIds: row.category ? [row.category] : [],
+    //                 language: row.language,
+    //                 format: row.format,
+    //                 genre: row.genre,
+    //                 rated: row.rated,
+    //                 coverImage: row.coverImage,
+    //                 isbn: row.isbn,
+    //                 publisher: row.publisher,
+    //                 commission: String(row.commission ?? '0'),
+    //             }));
+    //         } else if (
+    //             file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    //             file.mimetype === 'application/vnd.ms-excel' ||
+    //             file.originalname.endsWith('.xlsx') ||
+    //             file.originalname.endsWith('.xls')
+    //         ) {
+    //             const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    //             const sheetName = workbook.SheetNames[0];
+    //             const sheet = workbook.Sheets[sheetName];
+    //             const records = XLSX.utils.sheet_to_json(sheet);
+    //             books = records.map((row: any) => ({
+    //                 name: row.name,
+    //                 description: row.description,
+    //                 qty: Number(row.qty),
+    //                 sellingPrice: Number(row.sellingPrice),
+    //                 normalPrice: Number(row.normalPrice),
+    //                 categoryIds: row.category ? [row.category] : [],
+    //                 language: row.language,
+    //                 format: row.format,
+    //                 genre: row.genre,
+    //                 rated: row.rated,
+    //                 coverImage: row.coverImage,
+    //                 isbn: row.isbn,
+    //                 publisher: row.publisher,
+    //                 commission: String(row.commission ?? '0'),
+    //             }));
+    //         } else {
+    //             throw new BadRequestException('Unsupported file type');
+    //         }
+
+    //         console.log(colors.magenta("New books successfully added"))
+    //         return this.addBooksManually(books, []);
+    //     } catch (error) {
+    //         throw new BadRequestException('Failed to parse file: ' + error.message);
+    //     }
+    // }
 } 
