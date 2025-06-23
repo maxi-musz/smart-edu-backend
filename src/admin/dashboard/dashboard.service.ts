@@ -159,15 +159,16 @@ export class DashboardService {
         const activeCustomers = await this.prisma.user.count({
             where: {
                 role: 'user',
-                orders: {
-                    some: {
-                        createdAt: {
-                            gte: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000)
-                        }
-                    }
-                }
+                // orders: {
+                //     some: {
+                //         createdAt: {
+                //             gte: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+                //         }
+                //     }
+                // }
             }
         });
+        console.log("Active users: ", activeCustomers)
 
         return [
             {
@@ -360,7 +361,7 @@ export class DashboardService {
                 return sum + (item.order && item.order.status === 'delivered' ? item.price * item.quantity : 0);
             }, 0);
 
-            // Mock rating (you can implement real rating system later)
+            // Mock rating
             const rating = 4.5 + Math.random() * 0.5;
 
             return {
