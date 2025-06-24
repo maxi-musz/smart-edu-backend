@@ -16,19 +16,32 @@ export class CustomerResponseDto {
 
 export class OrderResponseDto {
     id: string;
-    customer: CustomerResponseDto;
-    date: string;
-    items: OrderItemResponseDto[];
-    total: number;
-    status: string;
-    paymentStatus: string;
-    paymentMethod: string;
-    shippingAddress: string;
-    trackingNumber?: string;
-    estimatedDelivery?: string;
-    orderNumber: string;
-    createdAt: string;
-    updatedAt: string;
+    order_id: string;
+    total_items: number;
+    customer_name: string;
+    customer_email: string;
+    order_date: string;
+    order_total: number;
+    total_paid: number;
+    to_balance: number;
+    percentage_paid: number;
+    shipment_status: string;
+    payment_status: string;
+    payment_method: string;
+    // Old fields commented out for reference
+    // customer?: CustomerResponseDto;
+    // date?: string;
+    // items?: OrderItemResponseDto[];
+    // total?: number;
+    // status?: string;
+    // paymentStatus?: string;
+    // paymentMethod?: string;
+    // shippingAddress?: string;
+    // trackingNumber?: string;
+    // estimatedDelivery?: string;
+    // orderNumber?: string;
+    // createdAt?: string;
+    // updatedAt?: string;
 }
 
 export class OrderStatsResponseDto {

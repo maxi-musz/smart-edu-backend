@@ -181,49 +181,31 @@ export class OrdersService {
         };
     }
 
-    private transformOrder(order: any): OrderResponseDto {
-        // Generate order number
-        const orderNumber = `#ORD-${order.id.slice(-8).toUpperCase()}`;
-        
-        // Generate estimated delivery (mock - 3 days from order date)
-        const estimatedDelivery = new Date(order.createdAt);
-        estimatedDelivery.setDate(estimatedDelivery.getDate() + 3);
-
-        // Mock payment status and method (in real app, these would come from payment system)
-        const paymentStatuses = ['Paid', 'Pending', 'Refunded'];
-        const paymentMethods = ['Card', 'Transfer', 'Cash'];
-        const paymentStatus = paymentStatuses[Math.floor(Math.random() * paymentStatuses.length)];
-        const paymentMethod = paymentMethods[Math.floor(Math.random() * paymentMethods.length)];
+    private transformOrder(order: any) {
+        // Calculate total items
+        const totalItems = order.items ? order.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
+        // Mock payment info (replace with real payment info when Payment model is added)
+        const totalPaid = order.payment?.paidAmount ?? 0;
+        const orderTotal = order.total ?? 0;
+        const toBalance = orderTotal - totalPaid;
+        const percentagePaid = orderTotal > 0 ? Math.round((totalPaid / orderTotal) * 100) : 0;
+        const paymentStatus = order.payment?.status ?? 'pending';
+        const paymentMethod = order.payment?.method ?? 'paystack';
 
         return {
             id: order.id,
-            customer: {
-                name: `${order.user.first_name} ${order.user.last_name}`,
-                email: order.user.email,
-                phone: order.user.phone_number
-            },
-            date: order.createdAt.toISOString().split('T')[0],
-            items: order.items.map(item => ({
-                id: item.id,
-                name: item.product.name,
-                quantity: item.quantity,
-                price: item.price,
-                isbn: item.product.isbn,
-                publisher: item.product.publisher,
-                format: item.product.formats && item.product.formats.length > 0
-                    ? item.product.formats.map(f => f.name).join(', ')
-                    : 'N/A',
-            })),
-            total: order.total,
-            status: this.mapOrderStatus(order.status),
-            paymentStatus,
-            paymentMethod,
-            shippingAddress: order.shippingAddress,
-            trackingNumber: order.trackingNumber,
-            estimatedDelivery: estimatedDelivery.toISOString().split('T')[0],
-            orderNumber,
-            createdAt: order.createdAt.toISOString(),
-            updatedAt: order.updatedAt.toISOString()
+            order_id: order.id,
+            total_items: totalItems,
+            customer_name: order.user ? `${order.user.first_name} ${order.user.last_name}` : 'N/A',
+            customer_email: order.user?.email ?? 'N/A',
+            order_date: order.createdAt?.toISOString() ?? 'N/A',
+            order_total: orderTotal,
+            total_paid: totalPaid,
+            to_balance: toBalance,
+            percentage_paid: percentagePaid,
+            shipment_status: order.status ?? 'N/A',
+            payment_status: paymentStatus,
+            payment_method: paymentMethod,
         };
     }
 

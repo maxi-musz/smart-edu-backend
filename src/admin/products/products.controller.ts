@@ -25,6 +25,24 @@ export class ProductsController {
         return this.productsService.getFilterOptions();
     }
 
+    @Get("all")
+    async adminGetAllProductDashboard(@Query() query: GetProductsDto) {
+        return this.productsService.adminGetAllProductDashboard(
+            query.page,
+            query.limit,
+            query.search,
+            query.category,
+            query.status,
+            query.format,
+            query.publisher,
+            query.author,
+            query.minPrice,
+            query.maxPrice,
+            query.inStock,
+            query.sortBy,
+            query.sortOrder
+        );
+    }
     @Get()
     async getAllProducts(@Query() query: GetProductsDto) {
         return this.productsService.getAllProducts(
@@ -92,4 +110,6 @@ export class ProductsController {
     // async addBooksFromFile(@UploadedFile() file: Express.Multer.File) {
     //     return this.productsService.addBooksFromFile(file);
     // }
+
+
 } 

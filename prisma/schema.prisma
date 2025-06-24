@@ -250,6 +250,8 @@ model Product {
   cartItems  CartItem[]
   orderItems OrderItem[]
   referrals  Referral[]
+
+  isFeatured Boolean @default(false)
 }
 
 model Category {

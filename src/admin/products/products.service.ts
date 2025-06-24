@@ -94,6 +94,100 @@ export class ProductsService {
         }
     }
 
+    ///////////////////////////////////////////// all products for product management page
+    async adminGetAllProductDashboard(
+        page: number = 1, 
+        limit: number = 10, 
+        search?: string,
+        category?: string,
+        status?: string,
+        format?: string,
+        publisher?: string,
+        author?: string,
+        minPrice?: number,
+        maxPrice?: number,
+        inStock?: boolean,
+        sortBy?: string,
+        sortOrder?: 'asc' | 'desc'
+    ) {
+        console.log(colors.cyan('Fetching ALL product table data  with filters...'));
+
+        try {
+            const skip = (page - 1) * limit;
+
+            // Get dashboard cards data
+            const [totalBooks, totalCategories, inStock, productsWithValue] = await Promise.all([
+                this.prisma.product.count(),
+                this.prisma.category.count(),
+                this.prisma.product.count({ where: { stock: { gt: 0 } } }),
+                this.prisma.product.findMany({
+                    select: { sellingPrice: true, stock: true }
+                })
+            ]);
+
+            const totalProductValue = productsWithValue.reduce((total, product) => {
+                return total + (product.sellingPrice * product.stock);
+            }, 0);
+
+            // Get products table data with pagination
+            const [products, total] = await Promise.all([
+                this.prisma.product.findMany({
+                    skip,
+                    take: limit,
+                    include: {
+                        categories: { select: { id: true, name: true } },
+                        formats: { select: { id: true, name: true } },
+                    },
+                    orderBy: { createdAt: 'desc' }
+                }),
+                this.prisma.product.count()
+            ]);
+
+            const totalPages = Math.ceil(total / limit);
+
+            const dashboardData = {
+                dashboardCards: {
+                    totalBooks,
+                    totalCategories,
+                    inStock,
+                    totalProductValue: Math.round(totalProductValue * 100) / 100 // Round to 2 decimal places
+                },
+                productsTable: {
+                    pagination: {
+                        currentPage: page,
+                        totalPages,
+                        totalItems: total,
+                        itemsPerPage: limit
+                    },
+                    products: products.map(product => ({
+                        id: product.id,
+                        bookName: product.name,
+                        publishedBy: product.publisher || 'N/A',
+                        bookFormat: product.formats && product.formats.length > 0
+                            ? product.formats.map(f => f.name).join(', ')
+                            : 'N/A',
+                        categories: product.categories.map(c => ({ id: c.id, name: c.name })),
+                        isbn: product.isbn || 'N/A',
+                        sellingPrice: product.sellingPrice,
+                        normalPrice: product.normalPrice,
+                        referralCommission: product.commission ?? null,
+                        stock: product.stock,
+                        status: product.status,
+                        displayImages: product.displayImages || [],
+                    })),
+                    
+                }
+            };
+
+            console.log(colors.magenta('Product dashboard data retrieved successfully'));
+            return new ApiResponse(true, "", dashboardData);
+
+        } catch (error) {
+            console.log(colors.red('Error fetching product dashboard:'), error);
+            throw error;
+        }
+    }
+
     async getAllProducts(
         page: number = 1, 
         limit: number = 10, 

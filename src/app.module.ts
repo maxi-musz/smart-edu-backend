@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module';
 import { SharedModule } from './shared/shared.module';
 import { AdminModule } from './admin/admin.module';
 import { PaystackModule } from './paystack/paystack.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PaystackModule } from './paystack/paystack.module';
     SharedModule,
     AdminModule,
     PaystackModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
