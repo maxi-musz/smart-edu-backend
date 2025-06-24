@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as colors from "colors";
 import { ApiResponse } from 'src/shared/helper-functions/response';
-import { formatAmount } from 'src/shared/helper-functions/formatter';
+import { formatAmount, formatDateWithoutTime } from 'src/shared/helper-functions/formatter';
 
 @Injectable()
 export class ProductsService {
@@ -253,5 +253,66 @@ export class ProductsService {
     }
   }
 
-  // A LOGIC THAT FETCHES ALL PRODUCTS FROM DB, TO BE DISPLAYED ON THE BROWSE PRODUCTS PAGE, FETCHING 20 BOOKS AT A TIME, WHEN USER GETS TO BOTTOM OF PAGE IT FETCHES ANOTHR NEW 20 LIKE THAT LIKE THAT
+  async getProductById(id: string) {
+    console.log(colors.cyan(`Fetching product with ID: ${id}`));
+
+    try {
+        const product = await this.prisma.product.findUnique({
+            where: { id },
+            include: {
+                store: { select: { id: true, name: true, email: true } },
+                categories: { select: { id: true, name: true } },
+                languages: { select: { id: true, name: true } },
+                genres: { select: { id: true, name: true } },
+                formats: { select: { id: true, name: true } },
+            }
+        });
+
+        if (!product) {
+            throw new NotFoundException('Product not found');
+        }
+
+        // Map to ProductResponseDto
+        const response = {
+            id: product.id,
+            name: product.name,
+            description: product.description ?? undefined,
+            sellingPrice: formatAmount(product.sellingPrice),
+            normalPrice: (product.normalPrice),
+            stock: product.stock,
+            images: Array.isArray(product.displayImages) ? product.displayImages.map((img: any) => img.secure_url) : [],
+            categoryId: product.categories && product.categories[0] ? product.categories[0].id : '',
+            storeId: product.storeId ?? '',
+            commission: product.commission ? Number(product.commission) : 0,
+            isActive: product.isActive,
+            status: product.status,
+            isbn: product.isbn ?? undefined,
+            format: product.formats ? product.formats.map(f => f.name) : [],
+            publisher: product.publisher ?? undefined,
+            author: product.author ?? undefined,
+            pages: product.pages ?? undefined,
+            language: product.languages ? product.languages.map(l => l.name) : [],
+            genre: product.genres ? product.genres.map(g => g.name) : [],
+            publishedDate: product.publishedDate ?? undefined,
+            createdAt: formatDateWithoutTime(product.createdAt),
+            updatedAt: formatDateWithoutTime(product.updatedAt),
+            store: product.store ? {
+                id: product.store.id,
+                name: product.store.name,
+                email: product.store.email
+            } : undefined,
+            category: product.categories && product.categories[0] ? {
+                id: product.categories[0].id,
+                name: product.categories[0].name
+            } : undefined
+        };
+
+        console.log(colors.magenta('Product retrieved successfully'));
+        return new ApiResponse(true, 'Product retrieved successfully', response);
+
+    } catch (error) {
+        console.log(colors.red('Error fetching product:'), error);
+        throw error;
+    }
+}
 }

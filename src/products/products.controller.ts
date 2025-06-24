@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 @Controller('products')
@@ -15,4 +15,9 @@ export class ProductsController {
     const pageNumber = parseInt(page, 10) || 1;
     return this.productsService.getPaginatedProducts(pageNumber);
   }
+
+  @Get(':id')
+    async getProductById(@Param('id') id: string) {
+        return this.productsService.getProductById(id);
+    }
 }
