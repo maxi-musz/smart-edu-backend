@@ -9,7 +9,7 @@ export class JwtGuard extends AuthGuard("jwt1") {
     }
 
     canActivate(context: ExecutionContext) {
-        console.log(colors.cyan('JWT Guard - Attempting to authenticate request'));
+        // console.log(colors.cyan('JWT Guard - Attempting to authenticate request'));
         
         const request = context.switchToHttp().getRequest();
         const authHeader = request.headers.authorization;

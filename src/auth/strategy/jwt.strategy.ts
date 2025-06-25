@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(
     }
 
     async validate(payload: JwtPayload) {
-        console.log(colors.yellow('JWT Strategy - Validating payload:'), payload);
+        // console.log(colors.yellow('JWT Strategy - Validating payload:'), payload);
         
         if (!payload) {
             console.log(colors.red('JWT Strategy - No payload found'));

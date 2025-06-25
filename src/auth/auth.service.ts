@@ -4,7 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import * as argon from 'argon2';
 import { ResponseHelper } from 'src/shared/helper-functions/response.helpers';
 import { formatDate } from 'src/shared/helper-functions/formatter';
-import { loggedInUserProfileDto, RequestLoginOtpDTO, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyEmailOTPDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
+import { loggedInUserProfileDto, RegisterDto, RequestLoginOtpDTO, RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyEmailOTPDto, VerifyresetOtp } from 'src/shared/dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { CloudinaryService } from 'src/shared/services/cloudinary.service';
@@ -234,6 +234,98 @@ export class AuthService {
         }
     }
 
+    async register(payload: RegisterDto) {
+        console.log(colors.cyan("Registering a new user"))
+
+        try {
+            // Check if user already exists
+            const existingUser = await this.prisma.user.findFirst({
+                where: { email: payload.email }
+            });
+
+            if (existingUser) {
+                console.log(colors.red("User already exists"))
+                return new ApiResponse(
+                    false,
+                    "User already exist"
+                );
+            }
+
+            // Hash the password
+            const hashedPassword = await argon.hash(payload.password);
+
+            // Create the user
+            const newUser = await this.prisma.user.create({
+                data: {
+                    first_name: payload.first_name,
+                    last_name: payload.last_name,
+                    email: payload.email,
+                    password: hashedPassword,
+                }
+            });
+
+            // Generate a unique referral code and URL for the new user
+            let uniqueCode: string;
+            let uniqueUrl: string;
+            while (true) {
+                // You can use a better generator if you want
+                uniqueCode = (newUser.first_name.substring(0, 3) + newUser.last_name.substring(0, 3) + Math.floor(Math.random() * 100000)).toLowerCase();
+                uniqueUrl = `https://access-slr.com/ref/${uniqueCode}`;
+                const exists = await this.prisma.referralCode.findUnique({ where: { code: uniqueCode } });
+                if (!exists) break;
+            }
+            await this.prisma.referralCode.create({
+                data: {
+                    code: uniqueCode,
+                    url: uniqueUrl,
+                    userId: newUser.id,
+                }
+            });
+
+            // Handle referral logic if referral_code is provided
+            if (payload.referral_code) {
+                // Find the referrer by referral code
+                const referrer = await this.prisma.referralCode.findUnique({
+                    where: { code: payload.referral_code },
+                    include: { user: true }
+                });
+                if (referrer && referrer.user) {
+                    // Create a Referral record
+                    await this.prisma.referral.create({
+                        data: {
+                            referrerId: referrer.user.id,
+                            referredId: newUser.id,
+                            code: payload.referral_code,
+                            productId: '',
+                        }
+                    });
+                } else {
+                    console.log(colors.yellow('Invalid referral code provided, skipping referral linkage.'));
+                }
+            }
+
+            const userResponse = {
+                id: newUser.id,
+                email: newUser.email,
+                first_name: newUser.first_name,
+                last_name: newUser.last_name,
+                createdAt: newUser.createdAt,
+            };
+
+            return new ApiResponse(
+                true,
+                "User registered successfully",
+                userResponse
+            );
+        } catch (error) {
+            console.log(colors.red("Error registering user"), error);
+            return new ApiResponse(
+                false,
+                "Error registering user"
+            );
+        }
+    }
+
     async fetchLoggedInUserProfile(user) {
         console.log(colors.cyan("Fetching logged in user details for user: "), user.suub)
 
@@ -252,13 +344,28 @@ export class AuthService {
                 )
             }
 
+            // Fetch total orders and total cart items for the user
+            const [totalOrders, totalCartItems] = await Promise.all([
+                this.prisma.order.count({ where: { userId: existing_user.id } }),
+                this.prisma.cartItem.count({ where: { cart: { userId: existing_user.id } } })
+            ]);
+
             const formatted_user_response = {
                 id: existing_user.id,
                 email: existing_user.email,
                 first_name: existing_user.first_name,
                 last_name: existing_user.last_name,
+                phone_number: existing_user.phone_number || "+2348146694787",
                 profile_picture: existing_user.display_picture,
-                role:existing_user.role
+                role: existing_user.role,
+                is_affiliate: existing_user.isAffiliate,
+                affiliate_status: existing_user.affiliateStatus,
+                joined_date: formatDate(existing_user.createdAt),
+                address: existing_user.address || "",
+                stats: {
+                    totalOrders,
+                    totalCartItems
+                }
             }
 
             console.log(colors.magenta("User successfully retrieved"))

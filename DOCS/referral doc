@@ -1,0 +1,57 @@
+Great idea! To handle this professionally and flexibly, you should:
+1. Add Referral Percentage and Payment Count to the User Model
+referralPercentage: Store the commission percentage for referrals (e.g., 5%).
+referralPaymentCount: Store how many times a referrer can earn commission from a referred user (e.g., 1, 2, 3, or unlimited).
+2. Data Types and Defaults
+referralPercentage: Use a Float (or Int if you want only whole numbers), with a sensible default (e.g., 5).
+referralPaymentCount: Use an Int for the count, and a special value (e.g., -1 or null) for unlimited.
+3. Where to Store These Fields
+If every user can have their own settings, add these fields to the User model.
+If these are global settings, create a ReferralSetting model (recommended for flexibility).
+4. Example Prisma Schema Changes
+Option A: Per-User Settings (add to User model)
+
+model User {
+  // ... existing code ...
+  referralPercentage   Float? @default(5)
+  referralPaymentCount Int?   @default(1) // -1 or null for unlimited
+  // ... existing code ...
+}
+
+Option B: Global Settings (recommended)
+
+model ReferralSetting {
+  id                    String   @id @default(cuid())
+  referralPercentage    Float    @default(5)
+  referralPaymentCount  Int      @default(1) // -1 or null for unlimited
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+You can then fetch this setting in your business logic.
+5. Business Logic
+When a referred user makes a purchase, check how many times the referrer has already received a commission for this user.
+If the count is less than referralPaymentCount (or unlimited), award the commission.
+6. Professional Touches
+Use enums for special values if you want (e.g., UNLIMITED).
+Document the logic in your codebase.
+Add admin controls to update these settings.
+Summary:
+For maximum flexibility and professionalism, use a ReferralSetting model for global settings, or add fields to the User model for per-user customization. Use a Float for percentage and an Int for count, with a special value for unlimited. Implement logic to track and enforce the payment count.
+Would you like to proceed with the global settings model, per-user settings, or both?
+
+Yes, you can absolutely use only the global referral settings without changing anything else in your schema or code!
+How it works:
+The per-user fields (referralPercentage and referralPaymentCount in the User model) are nullable.
+If you do not set these fields for a user (i.e., they remain null), your business logic should simply fall back to the global settings in the ReferralSetting model.
+You do not need to change or remove anything from your schema to use only the global settings.
+In practice:
+When calculating referral commission, always check the user's fields:
+If user.referralPercentage is null, use ReferralSetting.referralPercentage.
+If user.referralPaymentCount is null, use ReferralSetting.referralPaymentCount.
+You only need to:
+Create and manage a single ReferralSetting record (the global config).
+Ignore the per-user fields unless you want to override for a specific user in the future.
+Summary:
+You can use only the global settings and ignore the per-user fields. The schema is flexible for future needs, but you are not required to use the per-user overrides.
+Let me know if you want a sample query or code snippet for this logic!

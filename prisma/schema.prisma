@@ -147,6 +147,16 @@ enum BookFormat {
   hardcopy
 }
 
+enum AffiliateStatus {
+  not_affiliate
+  awaiting_approval
+  pending
+  approved
+  rejected
+  active
+  inactive
+}
+
 model Store {
   id          String      @id @default(cuid())
   name        String
@@ -187,34 +197,41 @@ model Document {
 }
 
 model User {
-  id                String     @id @default(cuid())
-  store_id          String?
-  email             String     @unique
-  password          String
-  first_name        String
-  last_name         String
-  phone_number      String
-  display_picture   String?
-  address           String?
-  gender            Gender     @default(other)
-  role              UserRole   @default(user)
-  status            UserStatus @default(active)
-  is_active         Boolean    @default(true)
-  level             UserLevel  @default(bronze)
-  otp               String?    @default("")
-  otp_expires_at    DateTime?
-  is_email_verified Boolean?   @default(false)
-  is_otp_verified   Boolean?   @default(false)
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  id                    String          @id @default(cuid())
+  store_id              String?
+  email                 String          @unique
+  password              String
+  first_name            String
+  last_name             String
+  phone_number          String?
+  display_picture       String?
+  address               String?
+  gender                Gender          @default(other)
+  role                  UserRole        @default(user)
+  status                UserStatus      @default(active)
+  is_active             Boolean         @default(true)
+  level                 UserLevel       @default(bronze)
+  otp                   String?         @default("")
+  otp_expires_at        DateTime?
+  is_email_verified     Boolean?        @default(false)
+  is_otp_verified       Boolean?        @default(false)
+  allowedPartialPayment Float?          @default(0)
+  referralPercentage    Float? // null means use global
+  referralPaymentCount  Int? // null means use global
+  isAffiliate           Boolean         @default(false)
+  affiliateStatus       AffiliateStatus @default(not_affiliate)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   // Relations
-  store          Store?       @relation(fields: [store_id], references: [id])
+  store          Store?        @relation(fields: [store_id], references: [id])
   orders         Order[]
   cart           Cart?
-  referrals_made Referral[]   @relation("Referrer")
-  referredBy     Referral[]   @relation("Referred")
+  referrals_made Referral[]    @relation("Referrer")
+  referredBy     Referral[]    @relation("Referred")
   commissions    Commission[]
+  referralCode   ReferralCode?
+  Affiliate      Affiliate?
 }
 
 model Product {
@@ -251,7 +268,8 @@ model Product {
   orderItems OrderItem[]
   referrals  Referral[]
 
-  isFeatured Boolean @default(false)
+  isFeatured Boolean     @default(false)
+  PromoCode  PromoCode[]
 }
 
 model Category {
@@ -419,4 +437,57 @@ model AgeRating {
   updatedAt      DateTime @updatedAt
   createdByName  String?
   createdByEmail String?
+}
+
+model PromoCode {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  description     String?
+  discountPercent Float
+  isActive        Boolean  @default(true)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  // New fields for product-specific promo codes
+  productId String? // Nullable: null means general promo code
+  product   Product? @relation(fields: [productId], references: [id])
+}
+
+model ReferralCode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  url       String   @unique
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model ReferralSetting {
+  id                   String   @id @default(cuid())
+  referralPercentage   Float    @default(5)
+  referralPaymentCount Int      @default(1) // -1 or null for unlimited
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Affiliate {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  userName        String
+  userEmail       String
+  status          AffiliateStatus @default(pending)
+  requestedAt     DateTime        @default(now())
+  category        String?
+  reason          String?
+  reviewedAt      DateTime?
+  reviewedByName  String?
+  reviewedByEmail String?
+  notes           String?
+  user            User            @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

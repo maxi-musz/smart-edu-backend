@@ -1,7 +1,7 @@
 import { Body, Controller, Post, UseInterceptors, UploadedFiles, Get, HttpCode, UseGuards, Request } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
-import { RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, OnboardClassesDto, OnboardTeachersDto, OnboardStudentsDto, OnboardDirectorsDto, OnboardDataDto, RequestLoginOtpDTO, VerifyEmailOTPDto, loggedInUserProfileDto } from 'src/shared/dto/auth.dto';
+import { RequestPasswordResetDTO, ResetPasswordDTO, SignInDto, VerifyresetOtp, RequestLoginOtpDTO, VerifyEmailOTPDto, RegisterDto } from 'src/shared/dto/auth.dto';
 import { FileValidationInterceptor } from 'src/shared/interceptors/file-validation.interceptor';
 
 import { OnboardStoreDTO } from 'src/shared/dto/store.dto';
@@ -69,6 +69,12 @@ export class AuthController {
     @HttpCode(200)
     signIn(@Body() dto: SignInDto) {
         return this.authService.signIn(dto);
+    }
+
+    @Post("register")
+    @HttpCode(201)
+    register(@Body() dto: RegisterDto) {
+        return this.authService.register(dto)
     }
 
     @UseGuards(JwtGuard)

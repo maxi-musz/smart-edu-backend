@@ -345,7 +345,7 @@ export class ReferralsService {
                 rewardStatus: this.mapRewardStatus(referral.status),
                 conversionDate: referral.isUsed ? referral.updatedAt.toISOString().split('T')[0] : null,
                 source: this.determineSource(referral.code),
-                region: this.determineRegion(referral.referred.phone_number),
+                region: this.determineRegion(referral.referred.phone_number || ""),
                 orderAmount: referral.product.sellingPrice || 50000,
                 commissionRate: referral.product.commission || 10
             }));

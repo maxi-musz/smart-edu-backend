@@ -119,7 +119,7 @@ export class CustomersService {
                     id: customer.id,
                     name: `${customer.first_name} ${customer.last_name}`,
                     email: customer.email,
-                    phone: customer.phone_number,
+                    phone: customer.phone_number || "",
                     address: customer.address || 'N/A',
                     joinDate: customer.createdAt.toISOString().split('T')[0],
                     totalOrders,

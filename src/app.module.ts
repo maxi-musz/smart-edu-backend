@@ -13,6 +13,8 @@ import { SharedModule } from './shared/shared.module';
 import { AdminModule } from './admin/admin.module';
 import { PaystackModule } from './paystack/paystack.module';
 import { ProductsModule } from './products/products.module';
+import { UserModule } from './user/user.module';
+import { DiscountModule } from './discount/discount.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { ProductsModule } from './products/products.module';
     AdminModule,
     PaystackModule,
     ProductsModule,
+    UserModule,
+    DiscountModule,
   ],
   controllers: [AppController],
   providers: [AppService],
