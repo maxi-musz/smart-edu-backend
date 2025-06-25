@@ -2,535 +2,585 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as colors from 'colors';
 import { ApiResponse } from 'src/shared/helper-functions/response';
+import { AffiliateStatus } from '@prisma/client';
+import slugify from 'slugify';
 
 @Injectable()
 export class ReferralsService {
     constructor(private prisma: PrismaService) {}
 
-    async getAllReferrals(page: number = 1, limit: number = 10, isUsed?: boolean) {
-        console.log(colors.cyan('Fetching all referrals...'));
+   
 
+    async fetchAffiliateDashboard(page: number = 1, limit: number = 10, isUsed?: boolean) {
+        console.log(colors.cyan('Fetching affiliate dashboard...'));
+        try {
+            // 1. KPI Cards
+            const [
+                totalRevenueAgg,
+                totalAffiliates,
+                totalClicks,
+                totalConversions,
+                pendingPayoutsAgg
+            ] = await Promise.all([
+                this.prisma.commission.aggregate({ _sum: { amount: true } }),
+                this.prisma.affiliate.count({}),
+                this.prisma.referral.count(),
+                this.prisma.referral.count({ where: { isUsed: true } }),
+                this.prisma.commission.aggregate({ _sum: { amount: true }, where: { status: 'pending' } })
+            ]);
+
+            const kpiCards = {
+                totalRevenue: Number(totalRevenueAgg._sum.amount || 0),
+                totalAffiliates: totalAffiliates,
+                totalClicks: totalClicks,
+                totalConversions: totalConversions,
+                pendingPayouts: Number(pendingPayoutsAgg._sum.amount || 0)
+            };
+
+            // 2. Affiliate Settings (mocked or configurable)
+            const affiliateSettings = {
+                affiliatePercentage: 10, // %
+                minimumAffiliates: 1,
+                rewardThreshold: 50, // ₦
+                expirationDays: 30
+            };
+
+            // 3. Leaderboard (top affiliates by revenue)
+            const leaderboardUsersRaw = await this.prisma.affiliate.findMany({
+                take: 20, // fetch more to allow filtering
+                orderBy: { requestedAt: 'asc' },
+                include: {
+                    user: true
+                }
+            });
+            // Only include affiliates with status 'approved' or 'active'
+            const leaderboardUsers = leaderboardUsersRaw.filter(
+                aff => aff.status === AffiliateStatus.approved || aff.status === AffiliateStatus.active
+            ).slice(0, 10); // limit to top 10 after filtering
+            // For each affiliate, calculate revenue, clicks, conversions
+            const leaderboard = await Promise.all(leaderboardUsers.map(async (aff) => {
+                const revenueAgg = await this.prisma.commission.aggregate({
+                    _sum: { amount: true },
+                    where: { userId: aff.userId }
+                });
+                const clicks = await this.prisma.referral.count({ where: { referrerId: aff.userId } });
+                const conversions = await this.prisma.referral.count({ where: { referrerId: aff.userId, isUsed: true } });
+                return {
+                    id: aff.userId,
+                    name: aff.userName,
+                    email: aff.userEmail,
+                    revenue: Number(revenueAgg._sum.amount || 0),
+                    clicks,
+                    conversions,
+                    status: aff.status,
+                    joinedAt: aff.createdAt.toISOString()
+                };
+            }));
+
+            // 4. Overview (summary and trends)
+            // For demo, use 'This Month' as selected timeframe
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const [
+                monthRevenueAgg,
+                monthClicks,
+                monthConversions,
+                monthNewAffiliates
+            ] = await Promise.all([
+                this.prisma.commission.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: startOfMonth, lte: endOfMonth } } }),
+                this.prisma.referral.count({ where: { createdAt: { gte: startOfMonth, lte: endOfMonth } } }),
+                this.prisma.referral.count({ where: { isUsed: true, createdAt: { gte: startOfMonth, lte: endOfMonth } } }),
+                this.prisma.affiliate.count({ where: { createdAt: { gte: startOfMonth, lte: endOfMonth } } })
+            ]);
+            // Trend data: last 7 days
+            const trendData = await Promise.all(Array.from({ length: 7 }).map(async (_, i) => {
+                const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+                const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1);
+                const revenueAgg = await this.prisma.commission.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: date, lt: nextDate } } });
+                const clicks = await this.prisma.referral.count({ where: { createdAt: { gte: date, lt: nextDate } } });
+                const conversions = await this.prisma.referral.count({ where: { isUsed: true, createdAt: { gte: date, lt: nextDate } } });
+                return {
+                    date: date.toISOString().split('T')[0],
+                    revenue: Number(revenueAgg._sum.amount || 0),
+                    clicks,
+                    conversions
+                };
+            }));
+            trendData.reverse(); // Chronological order
+            const overview = {
+                timeframes: ['Today', 'This Week', 'This Month', 'This Year'],
+                selectedTimeframe: 'This Month',
+                summary: {
+                    revenue: Number(monthRevenueAgg._sum.amount || 0),
+                    clicks: monthClicks,
+                    conversions: monthConversions,
+                    newAffiliates: monthNewAffiliates
+                },
+                trendData
+            };
+
+            // 5. Payouts (pending and completed commissions)
+            const payoutsRaw = await this.prisma.commission.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: 10
+            });
+            const payouts = await Promise.all(payoutsRaw.map(async (p) => {
+                const affiliate = await this.prisma.affiliate.findUnique({ where: { userId: p.userId } });
+                return {
+                    payoutId: p.id,
+                    affiliateId: p.userId,
+                    affiliateName: affiliate?.userName || '',
+                    amount: Number(p.amount),
+                    status: p.status,
+                    requestedAt: p.createdAt.toISOString(),
+                    paidAt: p.status === 'paid' ? p.updatedAt.toISOString() : null
+                };
+            }));
+
+            // 6. Events (recent affiliate-related events)
+            const eventsRaw = await this.prisma.referral.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: 10
+            });
+            const events = await Promise.all(eventsRaw.map(async (evt) => {
+                const affiliate = await this.prisma.affiliate.findUnique({ where: { userId: evt.referrerId } });
+                return {
+                    eventId: evt.id,
+                    type: evt.isUsed ? 'conversion' : 'click',
+                    affiliateId: evt.referrerId,
+                    affiliateName: affiliate?.userName || '',
+                    timestamp: evt.createdAt.toISOString(),
+                    details: evt.isUsed ? 'User signed up via referral link' : 'Referral link clicked'
+                };
+            }));
+
+            // 7. Analytics (conversion rate, avg order value, top sources, geo)
+            const [totalReferrals, usedReferrals, avgOrderAgg] = await Promise.all([
+                this.prisma.referral.count(),
+                this.prisma.referral.count({ where: { isUsed: true } }),
+                this.prisma.order.aggregate({ _avg: { total: true } })
+            ]);
+            const conversionRate = totalReferrals > 0 ? (usedReferrals / totalReferrals) * 100 : 0;
+            // Top sources (mocked, as no source field in schema)
+            const topSources = [
+                { source: 'Facebook', clicks: 5000, conversions: 120 },
+                { source: 'Twitter', clicks: 3000, conversions: 60 }
+            ];
+            // Geo distribution (mocked, as no geo field in schema)
+            const geoDistribution = [
+                { country: 'Nigeria', clicks: 7000, conversions: 150 },
+                { country: 'Ghana', clicks: 3000, conversions: 60 }
+            ];
+            const analytics = {
+                conversionRate: Number(conversionRate.toFixed(2)),
+                averageOrderValue: Number(avgOrderAgg._avg.total || 0),
+                topSources,
+                geoDistribution
+            };
+
+            // Final formatted response
+            const formattedResponse = {
+                kpiCards,
+                affiliateSettings,
+                leaderboard,
+                overview,
+                payouts,
+                events,
+                analytics
+            };
+
+            console.log(colors.magenta("Affiliate dashboard successfully returned"))
+            return {
+                success: true,
+                message: 'Affiliate dashboard fetched successfully.',
+                data: formattedResponse
+            };
+        } catch (error) {
+            console.log(colors.red('Error fetching affiliate dashboard:'), error);
+            return {
+                success: false,
+                message: 'Failed to fetch affiliate dashboard.',
+                data: null
+            };
+        }
+    }
+
+    async fetchAllAffiliates(page: number = 1, limit: number = 20, status?: string) {
+        console.log(colors.cyan('Fetching all affiliates...'), status);
         try {
             const skip = (page - 1) * limit;
-            
-            const whereClause = isUsed !== undefined ? { isUsed } : {};
-
-            const [referrals, total] = await Promise.all([
-                this.prisma.referral.findMany({
+            // Allowed statuses from AffiliateStatus enum
+            const allowedStatuses = [
+                AffiliateStatus.not_affiliate,
+                AffiliateStatus.awaiting_approval,
+                AffiliateStatus.pending,
+                AffiliateStatus.approved,
+                AffiliateStatus.rejected,
+                AffiliateStatus.active,
+                AffiliateStatus.inactive
+            ];
+            let whereClause;
+            if (status) {
+                if (!allowedStatuses.includes(status as AffiliateStatus)) {
+                    return {
+                        success: false,
+                        message: `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`,
+                        data: null
+                    };
+                }
+                whereClause = { status: status as AffiliateStatus };
+            } else {
+                whereClause = {
+                    OR: [
+                        { status: AffiliateStatus.approved },
+                        { status: AffiliateStatus.active }
+                    ]
+                };
+            }
+            const [affiliates, total] = await Promise.all([
+                this.prisma.affiliate.findMany({
                     skip,
                     take: limit,
                     where: whereClause,
+                    orderBy: { createdAt: 'desc' },
                     include: {
-                        referrer: {
-                            select: {
-                                id: true,
-                                first_name: true,
-                                last_name: true,
-                                email: true
-                            }
-                        },
-                        referred: {
-                            select: {
-                                id: true,
-                                first_name: true,
-                                last_name: true,
-                                email: true
-                            }
-                        }
-                    },
-                    orderBy: { createdAt: 'desc' }
-                }),
-                this.prisma.referral.count({ where: whereClause })
-            ]);
-
-            const totalPages = Math.ceil(total / limit);
-
-            console.log(colors.magenta(`Referrals retrieved successfully. Page ${page} of ${totalPages}`));
-            return {
-                referrals,
-                pagination: {
-                    currentPage: page,
-                    totalPages,
-                    totalItems: total,
-                    itemsPerPage: limit
-                }
-            };
-
-        } catch (error) {
-            console.log(colors.red('Error fetching referrals:'), error);
-            throw error;
-        }
-    }
-
-    async getReferralById(id: string) {
-        console.log(colors.cyan(`Fetching referral with ID: ${id}`));
-
-        try {
-            const referral = await this.prisma.referral.findUnique({
-                where: { id },
-                include: {
-                    referrer: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true,
-                            phone_number: true
-                        }
-                    },
-                    referred: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true,
-                            phone_number: true,
-                            createdAt: true
-                        }
-                    }
-                }
-            });
-
-            if (!referral) {
-                throw new NotFoundException('Referral not found');
-            }
-
-            console.log(colors.magenta('Referral retrieved successfully'));
-            return referral;
-
-        } catch (error) {
-            console.log(colors.red('Error fetching referral:'), error);
-            throw error;
-        }
-    }
-
-    async updateReferralUsage(id: string, isUsed: boolean) {
-        console.log(colors.cyan(`Updating referral usage to: ${isUsed}`));
-
-        try {
-            const referral = await this.prisma.referral.findUnique({
-                where: { id }
-            });
-
-            if (!referral) {
-                throw new NotFoundException('Referral not found');
-            }
-
-            const updatedReferral = await this.prisma.referral.update({
-                where: { id },
-                data: { isUsed },
-                include: {
-                    referrer: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true
-                        }
-                    },
-                    referred: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true
-                        }
-                    }
-                }
-            });
-
-            console.log(colors.magenta(`Referral usage updated to: ${isUsed}`));
-            return updatedReferral;
-
-        } catch (error) {
-            console.log(colors.red('Error updating referral usage:'), error);
-            throw error;
-        }
-    }
-
-    async getReferralsByUser(userId: string, page: number = 1, limit: number = 10) {
-        console.log(colors.cyan(`Fetching referrals for user: ${userId}`));
-
-        try {
-            const skip = (page - 1) * limit;
-
-            const [referrals, total] = await Promise.all([
-                this.prisma.referral.findMany({
-                    skip,
-                    take: limit,
-                    where: { referrerId: userId },
-                    include: {
-                        referred: {
+                        user: {
                             select: {
                                 id: true,
                                 first_name: true,
                                 last_name: true,
                                 email: true,
+                                phone_number: true,
+                                isAffiliate: true,
+                                affiliateStatus: true,
                                 createdAt: true
                             }
                         }
-                    },
-                    orderBy: { createdAt: 'desc' }
+                    }
                 }),
-                this.prisma.referral.count({ where: { referrerId: userId } })
+                this.prisma.affiliate.count({ where: whereClause })
             ]);
-
             const totalPages = Math.ceil(total / limit);
-
-            console.log(colors.magenta(`User referrals retrieved successfully. Page ${page} of ${totalPages}`));
+            const formattedAffiliates = affiliates.map(aff => ({
+                id: aff.id,
+                userId: aff.userId,
+                name: aff.userName,
+                email: aff.userEmail,
+                status: aff.status,
+                requestedAt: aff.requestedAt,
+                category: aff.category,
+                reason: aff.reason,
+                reviewedAt: aff.reviewedAt,
+                reviewedByName: aff.reviewedByName,
+                reviewedByEmail: aff.reviewedByEmail,
+                notes: aff.notes,
+                user: aff.user
+            }));
             return {
-                referrals,
-                pagination: {
-                    currentPage: page,
-                    totalPages,
-                    totalItems: total,
-                    itemsPerPage: limit
+                success: true,
+                message: 'Affiliates fetched successfully.',
+                data: {
+                    pagination: {
+                        currentPage: page,
+                        totalPages,
+                        totalItems: total,
+                        itemsPerPage: limit
+                    },
+                    affiliates: formattedAffiliates,
                 }
             };
-
         } catch (error) {
-            console.log(colors.red('Error fetching user referrals:'), error);
-            throw error;
-        }
-    }
-
-    async getReferralAnalytics() {
-        console.log(colors.cyan('Fetching comprehensive referral analytics...'));
-
-        try {
-            // 1. Get referral analytics with detailed information
-            const referralAnalytics = await this.prisma.referral.findMany({
-                include: {
-                    referrer: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true,
-                            phone_number: true,
-                            display_picture: true
-                        }
-                    },
-                    referred: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true,
-                            phone_number: true,
-                            display_picture: true
-                        }
-                    },
-                    product: {
-                        select: {
-                            id: true,
-                            name: true,
-                            sellingPrice: true,
-                            commission: true
-                        }
-                    }
-                },
-                orderBy: {
-                    createdAt: 'desc'
-                }
-            });
-
-            // 2. Get top referrers with aggregated data
-            const topReferrers = await this.prisma.user.findMany({
-                where: {
-                    referrals_made: {
-                        some: {}
-                    }
-                },
-                include: {
-                    _count: {
-                        select: {
-                            referrals_made: true
-                        }
-                    },
-                    referrals_made: {
-                        include: {
-                            product: true
-                        }
-                    },
-                    commissions: {
-                        where: {
-                            status: 'paid'
-                        }
-                    }
-                },
-                orderBy: {
-                    referrals_made: {
-                        _count: 'desc'
-                    }
-                },
-                take: 5
-            });
-
-            // 3. Get commission payouts data
-            const commissionPayouts = await this.prisma.user.findMany({
-                where: {
-                    commissions: {
-                        some: {}
-                    }
-                },
-                include: {
-                    commissions: {
-                        include: {
-                            order: true
-                        }
-                    }
-                },
-                orderBy: {
-                    commissions: {
-                        _count: 'desc'
-                    }
-                },
-                take: 3
-            });
-
-            // 4. Get recent referral events
-            const referralEvents = await this.prisma.referral.findMany({
-                take: 10,
-                include: {
-                    referrer: {
-                        select: {
-                            first_name: true,
-                            last_name: true
-                        }
-                    },
-                    referred: {
-                        select: {
-                            first_name: true,
-                            last_name: true
-                        }
-                    },
-                    product: true
-                },
-                orderBy: {
-                    createdAt: 'desc'
-                }
-            });
-
-            // 5. Generate performance data (last 6 months)
-            const performanceData = await this.generatePerformanceData();
-
-            // 6. Generate source breakdown (mock data based on referral codes)
-            const sourceBreakdown = this.generateSourceBreakdown(referralAnalytics);
-
-            // 7. Generate regional data (mock data)
-            const regionalData = this.generateRegionalData();
-
-            // Transform the data to match the desired format
-            const transformedReferralAnalytics = referralAnalytics.map((referral, index) => ({
-                id: referral.id,
-                referrer: {
-                    id: referral.referrer.id,
-                    name: `${referral.referrer.first_name} ${referral.referrer.last_name}`,
-                    email: referral.referrer.email,
-                    phone: referral.referrer.phone_number,
-                    referralCode: referral.code,
-                    avatar: referral.referrer.display_picture
-                },
-                referred: {
-                    id: referral.referred.id,
-                    name: `${referral.referred.first_name} ${referral.referred.last_name}`,
-                    email: referral.referred.email,
-                    phone: referral.referred.phone_number,
-                    avatar: referral.referred.display_picture
-                },
-                date: referral.createdAt.toISOString().split('T')[0],
-                status: this.mapReferralStatus(referral.status),
-                reward: referral.product.commission || 5000,
-                rewardStatus: this.mapRewardStatus(referral.status),
-                conversionDate: referral.isUsed ? referral.updatedAt.toISOString().split('T')[0] : null,
-                source: this.determineSource(referral.code),
-                region: this.determineRegion(referral.referred.phone_number || ""),
-                orderAmount: referral.product.sellingPrice || 50000,
-                commissionRate: referral.product.commission || 10
-            }));
-
-            const transformedTopReferrers = topReferrers.map((referrer, index) => {
-                const totalRevenue = referrer.referrals_made.reduce((sum, ref) => {
-                    return sum + (ref.product?.sellingPrice || 0);
-                }, 0);
-                
-                const totalCommission = referrer.commissions.reduce((sum, comm) => {
-                    return sum + comm.amount;
-                }, 0);
-
-                return {
-                    id: referrer.id,
-                    name: `${referrer.first_name} ${referrer.last_name}`,
-                    referralCode: referrer.referrals_made[0]?.code || 'N/A',
-                    referredUsers: referrer._count.referrals_made,
-                    referralOrders: referrer.referrals_made.filter(ref => ref.isUsed).length,
-                    revenueGenerated: totalRevenue,
-                    commission: totalCommission,
-                    avatar: referrer.display_picture,
-                    rank: index + 1
-                };
-            });
-
-            const transformedCommissionPayouts = commissionPayouts.map(payout => {
-                const totalEarned = payout.commissions.reduce((sum, comm) => sum + comm.amount, 0);
-                const totalPaid = payout.commissions
-                    .filter(comm => comm.status === 'paid')
-                    .reduce((sum, comm) => sum + comm.amount, 0);
-                const pending = totalEarned - totalPaid;
-
-                return {
-                    referrerId: payout.id,
-                    referrerName: `${payout.first_name} ${payout.last_name}`,
-                    commissionEarned: totalEarned,
-                    paid: totalPaid,
-                    pending: pending,
-                    lastPayout: payout.commissions.length > 0 
-                        ? payout.commissions[0].updatedAt.toISOString().split('T')[0] 
-                        : null,
-                    payoutMethod: 'Bank Transfer', // Mock data
-                    avatar: payout.display_picture
-                };
-            });
-
-            const transformedReferralEvents = referralEvents.map(event => ({
-                date: event.createdAt.toISOString().split('T')[0],
-                referrer: `${event.referrer.first_name} ${event.referrer.last_name}`,
-                referredUser: `${event.referred.first_name} ${event.referred.last_name}`,
-                action: event.isUsed ? 'Purchase' : 'Signup',
-                commission: event.isUsed ? (event.product?.commission || 0) : 0,
-                orderAmount: event.isUsed ? (event.product?.sellingPrice || 0) : 0
-            }));
-
-            const result = {
-                referralAnalytics: transformedReferralAnalytics,
-                topReferrers: transformedTopReferrers,
-                commissionPayouts: transformedCommissionPayouts,
-                referralEvents: transformedReferralEvents,
-                performanceData,
-                sourceBreakdown,
-                regionalData
+            console.log(colors.red('Error fetching affiliates:'), error);
+            return {
+                success: false,
+                message: 'Failed to fetch affiliates.',
+                data: null
             };
-
-            console.log(colors.magenta('Referral analytics retrieved successfully'));
-            return new ApiResponse(
-                true,
-                "Referral analytics retrieved successfully",
-                result
-            );
-
-        } catch (error) {
-            console.log(colors.red('Error fetching referral analytics:'), error);
-            throw error;
         }
     }
 
-    private mapReferralStatus(status: string): string {
-        switch (status) {
-            case 'pending':
-                return 'Pending';
-            case 'completed':
-                return 'Completed';
-            case 'cancelled':
-                return 'Expired';
-            default:
-                return 'Pending';
-        }
-    }
+    async updateAffiliateStatus(affiliateId: string, newStatus: string) {
 
-    private mapRewardStatus(status: string): string {
-        switch (status) {
-            case 'completed':
-                return 'Paid';
-            case 'pending':
-                return 'Pending';
-            case 'cancelled':
-                return 'Pending';
-            default:
-                return 'Pending';
-        }
-    }
-
-    private determineSource(code: string): string {
-        // Mock logic to determine source based on referral code
-        const sources = ['WhatsApp', 'Facebook', 'Instagram', 'Email', 'Direct'];
-        const hash = code.split('').reduce((a, b) => {
-            a = ((a << 5) - a) + b.charCodeAt(0);
-            return a & a;
-        }, 0);
-        return sources[Math.abs(hash) % sources.length];
-    }
-
-    private determineRegion(phone: string): string {
-        // Mock logic to determine region based on phone number
-        const regions = ['Lagos', 'Abuja', 'Port Harcourt', 'Kano', 'Others'];
-        const hash = phone.split('').reduce((a, b) => {
-            a = ((a << 5) - a) + b.charCodeAt(0);
-            return a & a;
-        }, 0);
-        return regions[Math.abs(hash) % regions.length];
-    }
-
-    private async generatePerformanceData() {
-        // Generate mock performance data for last 6 months
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-        const referredUsers = [120, 150, 180, 220, 280, 320];
-        const referralOrders = [85, 110, 130, 160, 200, 240];
-        const revenue = [850000, 1100000, 1300000, 1600000, 2000000, 2400000];
-        const commissions = [85000, 110000, 130000, 160000, 200000, 240000];
-
-        return {
-            labels: months,
-            referredUsers,
-            referralOrders,
-            revenue,
-            commissions
-        };
-    }
-
-    private generateSourceBreakdown(referrals: any[]) {
-        const sources = ['WhatsApp', 'Facebook', 'Instagram', 'Email', 'Direct'];
-        const total = referrals.length;
-        
-        return sources.map(source => {
-            const count = Math.floor(Math.random() * (total / sources.length)) + 1;
-            const percentage = Math.round((count / total) * 100);
-            return { source, count, percentage };
-        });
-    }
-
-    private generateRegionalData() {
-        const regions = [
-            { region: 'Lagos', referrals: 45, revenue: 2250000 },
-            { region: 'Abuja', referrals: 32, revenue: 1600000 },
-            { region: 'Port Harcourt', referrals: 28, revenue: 1400000 },
-            { region: 'Kano', referrals: 22, revenue: 1100000 },
-            { region: 'Others', referrals: 15, revenue: 750000 }
+        console.log(colors.cyan(`Updating affiliate status for ${affiliateId} to ${newStatus}`));
+        // List of allowed statuses from schema.prisma AffiliateStatus enum
+        const allowedStatuses = [
+            'not_affiliate',
+            'awaiting_approval',
+            'pending',
+            'approved',
+            'rejected',
+            'active',
+            'inactive'
         ];
-        return regions;
-    }
-
-    async getReferralConversionRate() {
-        console.log(colors.cyan('Calculating referral conversion rate...'));
-
+        if (!allowedStatuses.includes(newStatus.toLowerCase())) {
+            console.log(colors.red(`Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`))
+            return {
+                success: false,
+                message: `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`,
+                data: null
+            };
+        }
         try {
-            const totalReferrals = await this.prisma.referral.count();
-            const usedReferrals = await this.prisma.referral.count({
-                where: { isUsed: true }
+            // Check if affiliate record exists
+            const affiliateRecord = await this.prisma.affiliate.findFirst({ where: { id: affiliateId } });
+            if (!affiliateRecord) {
+                console.log(colors.red('Affiliate record not found.'))
+                return {
+                    success: false,
+                    message: 'Affiliate record not found.',
+                    data: null
+                };
+            }
+            // Update affiliate record
+            const updated = await this.prisma.affiliate.update({
+                where: { id: affiliateId },
+                data: { status: newStatus as AffiliateStatus }
+            });
+            // Determine isAffiliate value
+            const isAffiliate = (newStatus === 'approved' || newStatus === 'active');
+            // Update the affiliateStatus and isAffiliate in the related use r record
+            await this.prisma.user.update({
+                where: { id: updated.userId },
+                data: {
+                    affiliateStatus: newStatus as AffiliateStatus,
+                    isAffiliate: isAffiliate
+                }
             });
 
-            const conversionRate = totalReferrals > 0 ? (usedReferrals / totalReferrals) * 100 : 0;
-
-            console.log(colors.magenta(`Referral conversion rate: ${conversionRate.toFixed(2)}%`));
+            console.log(colors.magenta(`Affiliate status updated to ${newStatus}`))
             return {
-                totalReferrals,
-                usedReferrals,
-                conversionRate: parseFloat(conversionRate.toFixed(2))
+                success: true,
+                message: `Affiliate status updated to ${newStatus}`,
+                data: updated
             };
-
         } catch (error) {
-            console.log(colors.red('Error calculating referral conversion rate:'), error);
-            throw error;
+            console.log(colors.red('Error updating affiliate status:'), error);
+            return {
+                success: false,
+                message: 'Failed to update affiliate status.',
+                data: null
+            };
         }
     }
+
+    /**
+     * Generate a unique affiliate link for a user and product
+     */
+    async generateAffiliateLink(userId: string, productId: string) {
+        console.log(colors.cyan("generating affiliate link"));
+        try {
+            // Check if user is an approved/active affiliate
+            const affiliate = await this.prisma.affiliate.findUnique({ where: { userId } });
+            if (!affiliate || !(affiliate.status === AffiliateStatus.approved || affiliate.status === AffiliateStatus.active)) {
+                console.log(colors.red('User is not an approved or active affiliate.'));
+                return {
+                    success: false,
+                    message: 'User is not an approved or active affiliate.',
+                    data: null
+                };
+            } 
+            // Check if product exists
+            const product = await this.prisma.product.findUnique({ where: { id: productId } });
+            if (!product) {
+                console.log(colors.red('Product not found.'));
+                return {
+                    success: false,
+                    message: 'Product not found.',
+                    data: null
+                };
+            }
+            // Check if link already exists for this user-product
+            const existing = await this.prisma.affiliateLink.findUnique({ where: { userId_productId: { userId, productId } } });
+            if (existing) {
+                console.log(colors.yellow('Affiliate link already exists.'));
+                return {
+                    success: true,
+                    message: 'Affiliate link already exists.', 
+                    data: existing 
+                };
+            }
+            // Generate a unique slug
+            let baseSlug = slugify(`${affiliate.userName}-${product.name}`, { lower: true, strict: true });
+            let slug = baseSlug;
+            let i = 1;
+            while (await this.prisma.affiliateLink.findUnique({ where: { slug } })) {
+                slug = `${baseSlug}-${i++}`;
+            }
+            // Create the link
+            const link = await this.prisma.affiliateLink.create({
+                data: {
+                    userId,
+                    productId,
+                    slug
+                }
+            });
+            // Construct shareable link
+            const baseUrl = process.env.BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+            const productSlug = product.id;
+            const shareableLink = `${baseUrl}/product/${productSlug}?ref=${link.slug}`;
+            console.log(colors.green('Affiliate link generated successfully.'));
+            return {
+                success: true,
+                message: 'Affiliate link generated successfully.',
+                data: {
+                    ...link,
+                    shareableLink
+                }
+            };
+        } catch (error) {
+            console.log(colors.red('Error generating affiliate link:'), error);
+            return {
+                success: false, 
+                message: 'Failed to generate affiliate link.',
+                data: null,
+                error: error?.message || error
+            };
+        }
+    }
+
+    /**
+     * Get all affiliate links for a user
+     */
+    async getAffiliateLinksForUser(userId: string) {
+        console.log(colors.cyan('Fetching affiliate links for user...'));
+        try {
+            const links = await this.prisma.affiliateLink.findMany({
+                where: { userId },
+                include: {
+                    product: true
+                }
+            });
+            console.log(colors.green('Affiliate links fetched successfully.'));
+            return {
+                success: true,
+                message: 'Affiliate links fetched successfully.',
+                data: links
+            };
+        } catch (error) {
+            console.log(colors.red('Error fetching affiliate links:'), error);
+            return {
+                success: false,
+                message: 'Failed to fetch affiliate links.',
+                data: null,
+                error: error?.message || error
+            };
+        }
+    }
+
+    /**
+     * Track a click on an affiliate link (by slug)
+     */
+    async trackAffiliateLinkClick(slug: string) {
+        console.log(colors.cyan('Tracking click for affiliate link...'));
+        try {
+            const link = await this.prisma.affiliateLink.findUnique({ where: { slug } });
+            if (!link) {
+                console.log(colors.red('Affiliate link not found.'));
+                return {
+                    success: false,
+                    message: 'Affiliate link not found.',
+                    data: null
+                };
+            }
+            await this.prisma.affiliateLink.update({
+                where: { slug },
+                data: { clicks: { increment: 1 } }
+            });
+            console.log(colors.green('Click tracked.'));
+            return {
+                success: true,
+                message: 'Click tracked.',
+                data: null
+            };
+        } catch (error) {
+            console.log(colors.red('Error tracking click:'), error);
+            return {
+                success: false,
+                message: 'Failed to track click.',
+                data: null,
+                error: error?.message || error
+            };
+        }
+    }
+
+    /**
+     * Track a conversion/order for an affiliate link (by slug)
+     * Optionally increment commission
+     */
+    async trackAffiliateLinkConversion(slug: string, orderId: string, commissionAmount: number = 0) {
+        console.log(colors.cyan('Tracking conversion for affiliate link...'));
+        try {
+            const link = await this.prisma.affiliateLink.findUnique({ where: { slug } });
+            if (!link) {
+                console.log(colors.red('Affiliate link not found.'));
+                return {
+                    success: false,
+                    message: 'Affiliate link not found.',
+                    data: null
+                };
+            }
+            await this.prisma.affiliateLink.update({
+                where: { slug },
+                data: {
+                    orders: { increment: 1 },
+                    commission: { increment: commissionAmount }
+                }
+            });
+            // Optionally, you can also create a record in a conversion table or log
+            console.log(colors.green('Conversion tracked.'));
+            return {
+                success: true,
+                message: 'Conversion tracked.',
+                data: null
+            };
+        } catch (error) {
+            console.log(colors.red('Error tracking conversion:'), error);
+            return {
+                success: false,
+                message: 'Failed to track conversion.',
+                data: null,
+                error: error?.message || error
+            };
+        }
+    }
+
+    /**
+     * Get affiliate link for a user and product
+     */
+    async getAffiliateLinkForUserAndProduct(userId: string, productId: string) {
+        console.log(colors.cyan('Fetching affiliate link for user and product...'));
+        try {
+            const link = await this.prisma.affiliateLink.findUnique({ where: { userId_productId: { userId, productId } } });
+            if (!link) {
+                return {
+                    success: true,
+                    message: 'No affiliate link found for this user and product.',
+                    data: null
+                };
+            }
+            // Get product for shareable link
+            const product = await this.prisma.product.findUnique({ where: { id: productId } });
+            const baseUrl = process.env.BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+            const productSlug = product?.id;
+            const shareableLink = `${baseUrl}/product/${productSlug}?ref=${link.slug}`;
+            return {
+                success: true,
+                message: 'Affiliate link found.',
+                data: {
+                    ...link,
+                    shareableLink
+                }
+            };
+        } catch (error) {
+            console.log(colors.red('Error fetching affiliate link for user and product:'), error);
+            return {
+                success: false,
+                message: 'Failed to fetch affiliate link for user and product.',
+                data: null,
+                error: error?.message || error
+            };
+        }
+    }
+
 } 

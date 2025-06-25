@@ -355,6 +355,7 @@ export class AuthService {
                 email: existing_user.email,
                 first_name: existing_user.first_name,
                 last_name: existing_user.last_name,
+                // is_affiliate: existing_user.isAffiliate,
                 phone_number: existing_user.phone_number || "+2348146694787",
                 profile_picture: existing_user.display_picture,
                 role: existing_user.role,

@@ -1,50 +1,80 @@
-import { Controller, Get, Param, Query, Put, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Put, UseGuards, Body, Post, Request } from '@nestjs/common';
 import { ReferralsService } from './referrals.service';
 import { JwtGuard } from '../../auth/guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { GenerateAffiliateLinkDto } from './dto/generate-affiliate-link.dto';
+import { TrackAffiliateLinkConversionDto } from './dto/track-affiliate-link-conversion.dto';
 
-@Controller('admin/referrals')
+@Controller('admin/affiliates')
 @UseGuards(JwtGuard)
+@Roles("admin")
 export class ReferralsController {
     constructor(private referralsService: ReferralsService) {}
 
     @Get()
-    async getAllReferrals(
+    async fetchAffiliateDashboard() {
+        return this.referralsService.fetchAffiliateDashboard()
+    }
+
+    @Get('all')
+    async fetchAllAffiliates(
         @Query('page') page: number = 1,
-        @Query('limit') limit: number = 10,
-        @Query('isUsed') isUsed?: boolean
+        @Query('limit') limit: number = 20,
+        @Query('status') status?: string
     ) {
-        return this.referralsService.getAllReferrals(page, limit, isUsed);
+        return this.referralsService.fetchAllAffiliates(Number(page), Number(limit), status);
     }
 
-    @Get(':id')
-    async getReferralById(@Param('id') id: string) {
-        return this.referralsService.getReferralById(id);
-    }
-
-    @Put(':id/usage')
-    async updateReferralUsage(
+    @Put(':id/status')
+    async updateAffiliateStatus(
         @Param('id') id: string,
-        @Query('isUsed') isUsed: boolean
+        @Body('status') status: string
     ) {
-        return this.referralsService.updateReferralUsage(id, isUsed);
+        return this.referralsService.updateAffiliateStatus(id, status);
     }
 
-    @Get('user/:userId')
-    async getReferralsByUser(
-        @Param('userId') userId: string,
-        @Query('page') page: number = 1,
-        @Query('limit') limit: number = 10
+    // Generate affiliate link
+    @Post('link')
+    async generateAffiliateLink(
+        @Request() req,
+        @Body() dto: GenerateAffiliateLinkDto
     ) {
-        return this.referralsService.getReferralsByUser(userId, page, limit);
+        const userId = req.user.id;
+        return this.referralsService.generateAffiliateLink(userId, dto.productId);
     }
 
-    @Get('analytics/overview')
-    async getReferralAnalytics() {
-        return this.referralsService.getReferralAnalytics();
+    // Get all affiliate links for a user
+    @Get(':userId/links')
+    async getAffiliateLinksForUser(
+        @Param('userId') userId: string
+    ) {
+        return this.referralsService.getAffiliateLinksForUser(userId);
     }
 
-    @Get('analytics/conversion-rate')
-    async getReferralConversionRate() {
-        return this.referralsService.getReferralConversionRate();
+    // Track click on affiliate link
+    @Post('link/:slug/click')
+    async trackAffiliateLinkClick(
+        @Param('slug') slug: string
+    ) {
+        return this.referralsService.trackAffiliateLinkClick(slug);
     }
+
+    // Track conversion for affiliate link
+    @Post('link/:slug/conversion') 
+    async trackAffiliateLinkConversion(
+        @Param('slug') slug: string,
+        @Body() dto: TrackAffiliateLinkConversionDto
+    ) {
+        return this.referralsService.trackAffiliateLinkConversion(slug, dto.orderId, dto.commissionAmount);
+    }
+
+    // Get affiliate link for current user and product
+    @Get('link/:productId')
+    async getAffiliateLinkForUserAndProduct(
+        @Request() req,
+        @Param('productId') productId: string
+    ) {
+        const userId = req.user.id;
+        return this.referralsService.getAffiliateLinkForUserAndProduct(userId, productId);
+    } 
 } 
